@@ -157,21 +157,8 @@ KIS REST 주문 API 호출
 
 ---
 
-## 8. 기술 스택
 
-| 구분 | 기술 |
-|---|---|
-| Backend | FastAPI, SQLAlchemy, SQLite |
-| Frontend | React, Vite |
-| 데이터 시각화 | Recharts |
-| 서버 상태 관리 | React Query |
-| 주가 데이터 | pykrx, FinanceDataReader |
-| 실시간 데이터 | KIS Open API WebSocket |
-| 증권사 연동 | 한국투자증권 KIS 모의투자 API |
-
----
-
-## 9. 시스템 구조
+## 8. 시스템 구조
 
 ```text
 [React 웹 화면]
@@ -206,7 +193,7 @@ KIS REST 주문 API 호출
 
 ---
 
-## 10. 프로젝트를 통해 학습할 수 있는 내용
+## 9. 프로젝트를 통해 학습할 수 있는 내용
 
 ### 웹 개발
 
