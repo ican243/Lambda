@@ -1,0 +1,5 @@
+config/kis_config.php
+config/token_cache.json
+cron/temp_master/
+.DS_Store
+Thumbs.db
