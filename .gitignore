@@ -3,3 +3,6 @@ config/token_cache.json
 cron/temp_master/
 .DS_Store
 Thumbs.db
+stock-ws/node_modules/
+stock-ws/.env
+stock-ws/logs/
