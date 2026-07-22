@@ -51,25 +51,51 @@ include 'includes/header.php';
         data.forEach(item => {
             const changeClass = item.change_price > 0 ? 'text-danger' : (item.change_price < 0 ? 'text-primary' : '');
             const row = `
-            <tr>
-                <td>${item.stock_name}</td>
-                <td>${item.price ? Number(item.price).toLocaleString() + '원' : '-'}</td>
-                <td class="${changeClass}">${item.change_price ?? '-'}</td>
-                <td class="${changeClass}">${item.change_rate ?? '-'}%</td>
-                <td>${item.created_at ?? '-'}</td>
-                <td><button class="btn btn-sm btn-outline-danger" onclick="removeFromWatchlist('${item.stock_code}')">삭제</button></td>
-                <td>
-    <button class="btn btn-sm btn-outline-danger" onclick="removeFromWatchlist('${item.stock_code}')">삭제</button>
-    <a href="stock_csv.php?stock_code=${item.stock_code}" class="btn btn-sm btn-outline-primary">CSV</a>
-</td>
-            </tr>
-        `;
+    <tr data-code="${item.stock_code}">
+        <td><a href="stock_detail.php?code=${item.stock_code}">${item.stock_name}</a></td>
+        <td class="price">${item.price ? Number(item.price).toLocaleString() + '원' : '-'}</td>
+        <td class="change-price ${changeClass}">${item.change_price ?? '-'}</td>
+        <td class="change-rate ${changeClass}">${item.change_rate ?? '-'}%</td>
+        <td class="updated-at">${item.created_at ?? '-'}</td>
+        <td><button class="btn btn-sm btn-outline-danger" onclick="removeFromWatchlist('${item.stock_code}')">삭제</button></td>
+    </tr>
+`;
             tbody.innerHTML += row;
         });
     }
 
     loadPrices();
     setInterval(loadPrices, 5000);
+
+    //  실시간 갱신 
+
+    const realtimeSocket = new WebSocket('ws://localhost:8080');
+
+    realtimeSocket.onopen = () => {
+        console.log('실시간 연결 성공');
+    };
+
+    realtimeSocket.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        updateRowRealtime(data);
+    };
+
+    realtimeSocket.onclose = () => {
+        console.log('실시간 연결 끊김 (5초 폴링으로 백업 운영)');
+    };
+
+    function updateRowRealtime(data) {
+        const row = document.querySelector(`tr[data-code="${data.stock_code}"]`);
+        if (!row) return; // 내 관심종목에 없는 종목이면 무시
+
+        const changeClass = data.change_price > 0 ? 'text-danger' : (data.change_price < 0 ? 'text-primary' : '');
+
+        row.querySelector('.price').textContent = Number(data.price).toLocaleString() + '원';
+        row.querySelector('.change-price').textContent = data.change_price;
+        row.querySelector('.change-price').className = 'change-price ' + changeClass;
+        row.querySelector('.change-rate').textContent = data.change_rate + '%';
+        row.querySelector('.updated-at').textContent = new Date(data.created_at).toLocaleString();
+    }
 
     // -----------------------------
     // 2. 종목 검색 (디바운스 적용)

@@ -107,27 +107,21 @@ function removeWatchlist($conn, $userId, $stockCode)
 function getMyWatchlistPrices($conn, $userId)
 {
     $stmt = mysqli_prepare($conn, "
-        SELECT w.stock_code, sm.stock_name, sl.price, sl.change_price, sl.change_rate, sl.created_at
+        SELECT w.stock_code, sl.stock_name, sl.price, sl.change_price, sl.change_rate, sl.updated_at as created_at
         FROM watchlist w
-        INNER JOIN stock_master sm ON w.stock_code = sm.stock_code
-        LEFT JOIN stock_logs sl ON sl.stock_code = w.stock_code
+        INNER JOIN stock_latest sl ON w.stock_code = sl.stock_code
         WHERE w.user_id = ?
-        AND (sl.id IS NULL OR sl.id = (
-            SELECT MAX(id) FROM stock_logs WHERE stock_code = w.stock_code
-        ))
         ORDER BY w.created_at DESC
     ");
     mysqli_stmt_bind_param($stmt, "i", $userId);
     mysqli_stmt_execute($stmt);
     $result = mysqli_stmt_get_result($stmt);
-
     $prices = [];
     while ($row = mysqli_fetch_assoc($result)) {
         $prices[] = $row;
     }
     return $prices;
 }
-
 // -----------------------------
 // 10. 특정 종목의 전체 시세 기록 (CSV용)
 // -----------------------------
@@ -280,9 +274,8 @@ function getMyHoldings($conn, $userId)
         SELECT h.stock_code, sm.stock_name, h.quantity, h.avg_price, sl.price as current_price
         FROM holdings h
         INNER JOIN stock_master sm ON h.stock_code = sm.stock_code
-        LEFT JOIN stock_logs sl ON sl.stock_code = h.stock_code
+        LEFT JOIN stock_latest sl ON sl.stock_code = h.stock_code
         WHERE h.user_id = ?
-        AND (sl.id IS NULL OR sl.id = (SELECT MAX(id) FROM stock_logs WHERE stock_code = h.stock_code))
     ");
     mysqli_stmt_bind_param($stmt, "i", $userId);
     mysqli_stmt_execute($stmt);
@@ -335,4 +328,78 @@ function getMyOrders($conn, $userId)
         $orders[] = $row;
     }
     return $orders;
+}
+
+
+
+// 특정 종목의 오늘 시세 흐름 (차트용)
+
+function getStockChartData($conn, $stockCode)
+{
+    $stmt = mysqli_prepare($conn, "
+        SELECT created_at, price
+        FROM stock_logs
+        WHERE stock_code = ? AND DATE(created_at) = CURDATE()
+        ORDER BY created_at ASC
+    ");
+    mysqli_stmt_bind_param($stmt, "s", $stockCode);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+
+    $data = [];
+    while ($row = mysqli_fetch_assoc($result)) {
+        $data[] = $row;
+    }
+    return $data;
+}
+
+
+// 특정 종목의 최신 시세 1건 (상세페이지 상단용)
+
+function getSingleStockPrice($conn, $stockCode)
+{
+    $stmt = mysqli_prepare($conn, "
+        SELECT sm.stock_name, sl.price, sl.change_price, sl.change_rate, sl.updated_at as created_at
+        FROM stock_master sm
+        LEFT JOIN stock_latest sl ON sl.stock_code = sm.stock_code
+        WHERE sm.stock_code = ?
+    ");
+    mysqli_stmt_bind_param($stmt, "s", $stockCode);
+    mysqli_stmt_execute($stmt);
+    return mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
+}
+
+// -----------------------------
+// 1분봉 캔들 데이터 생성 (오늘자 원시 데이터를 1분 단위로 묶음)
+// -----------------------------
+function getCandleData($conn, $stockCode)
+{
+    $stmt = mysqli_prepare($conn, "
+        SELECT created_at, price
+        FROM stock_logs
+        WHERE stock_code = ? AND DATE(created_at) = CURDATE()
+        ORDER BY created_at ASC
+    ");
+    mysqli_stmt_bind_param($stmt, "s", $stockCode);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+
+    $buckets = [];
+    while ($row = mysqli_fetch_assoc($result)) {
+        $minuteKey = substr($row['created_at'], 0, 16);
+        $buckets[$minuteKey][] = (float) $row['price'];
+    }
+
+    $candles = [];
+    foreach ($buckets as $minuteKey => $prices) {
+        $candles[] = [
+            'time'  => strtotime($minuteKey . ':00'),
+            'open'  => $prices[0],
+            'high'  => max($prices),
+            'low'   => min($prices),
+            'close' => end($prices),
+        ];
+    }
+
+    return $candles;
 }

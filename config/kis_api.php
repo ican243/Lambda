@@ -133,6 +133,30 @@ function saveStockLog($conn, $priceData)
     return mysqli_stmt_execute($stmt);
 }
 
+function upsertStockLatest($conn, $priceData)
+{
+    $stmt = mysqli_prepare($conn, "
+        INSERT INTO stock_latest (stock_code, stock_name, price, change_price, change_rate, volume)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE 
+            price = VALUES(price), 
+            change_price = VALUES(change_price), 
+            change_rate = VALUES(change_rate), 
+            volume = VALUES(volume)
+    ");
+    mysqli_stmt_bind_param(
+        $stmt,
+        "ssiidi",
+        $priceData['stock_code'],
+        $priceData['stock_name'],
+        $priceData['price'],
+        $priceData['change_price'],
+        $priceData['change_rate'],
+        $priceData['volume']
+    );
+    return mysqli_stmt_execute($stmt);
+}
+
 
 // 시세 조회 + DB 저장을 한 번에
 
@@ -145,6 +169,7 @@ function fetchAndSaveStockPrice($conn, $stockCode, $stockName = null)
 
     upsertStockMaster($conn, $stockCode, $nameToSave);
     saveStockLog($conn, $priceData);
+    upsertStockLatest($conn, $priceData);
 
     return $priceData;
 }
@@ -180,9 +205,8 @@ function getHashKey($data)
 // -----------------------------
 // 매수/매도 공통 주문 함수
 // -----------------------------
-function placeStockOrder($stockCode, $quantity, $orderType)
+function placeStockOrder($stockCode, $quantity, $orderType, $retryCount = 0)
 {
-    // $orderType: 'buy' 또는 'sell'
     $token = getKisAccessToken();
     $trId = ($orderType === 'buy') ? 'VTTC0802U' : 'VTTC0801U';
 
@@ -190,9 +214,9 @@ function placeStockOrder($stockCode, $quantity, $orderType)
         "CANO" => KIS_ACCOUNT_NO,
         "ACNT_PRDT_CD" => KIS_ACCOUNT_PRDT_CD,
         "PDNO" => $stockCode,
-        "ORD_DVSN" => "01",          // 01 = 시장가
+        "ORD_DVSN" => "01",
         "ORD_QTY" => (string) $quantity,
-        "ORD_UNPR" => "0",           // 시장가라 0
+        "ORD_UNPR" => "0",
     ];
 
     $hashKey = getHashKey($orderData);
@@ -204,6 +228,7 @@ function placeStockOrder($stockCode, $quantity, $orderType)
         CURLOPT_URL => $url,
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_POST => true,
+        CURLOPT_TIMEOUT => 10,   // 10초 이상 응답 없으면 포기하고 재시도 판단
         CURLOPT_HTTPHEADER => [
             "content-type: application/json",
             "authorization: Bearer " . $token,
@@ -216,13 +241,24 @@ function placeStockOrder($stockCode, $quantity, $orderType)
     ]);
 
     $response = curl_exec($curl);
+    $curlError = curl_error($curl);
     curl_close($curl);
 
     $result = json_decode($response, true);
 
-    if ($result['rt_cd'] !== '0') {
-        throw new Exception("주문 실패: " . ($result['msg1'] ?? '알 수 없는 오류'));
+    // 재시도 대상 에러인지 판단 (초당 제한, 타임아웃)
+    $isRetryable = $curlError !== ''
+        || ($result['msg_cd'] ?? '') === 'EGW00201'   // 초당 거래건수 초과
+        || $result === null;
+
+    if ($isRetryable && $retryCount < 2) {
+        sleep(2);   // 2초 쉬었다가
+        return placeStockOrder($stockCode, $quantity, $orderType, $retryCount + 1);   // 재시도 (최대 2번)
     }
 
-    return $result['output'];   // 주문번호(ODNO) 등이 들어있음
+    if (!$result || $result['rt_cd'] !== '0') {
+        throw new Exception("주문 실패: " . ($result['msg1'] ?? $curlError ?: '알 수 없는 오류'));
+    }
+
+    return $result['output'];
 }

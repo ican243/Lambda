@@ -30,7 +30,7 @@ include 'includes/header.php';
 
 <div class="card p-3 mb-4">
     <h5>주문하기</h5>
-    <form action="trade_process.php" method="POST" class="row g-2">
+    <form id="trade-form" action="trade_process.php" method="POST" class="row g-2">
         <div class="col-md-3">
             <input type="text" name="stock_code" class="form-control" placeholder="종목코드 (예: 005930)" required>
         </div>
@@ -73,7 +73,6 @@ include 'includes/header.php';
     </tbody>
 </table>
 
-
 <h5 class="mt-5">주문 내역</h5>
 <table class="table table-bordered">
     <thead>
@@ -102,5 +101,11 @@ include 'includes/header.php';
         <?php endforeach; ?>
     </tbody>
 </table>
+
+<script>
+    document.getElementById('trade-form')?.addEventListener('submit', function() {
+        this.querySelectorAll('button').forEach(btn => btn.disabled = true);
+    });
+</script>
 
 <?php include 'includes/footer.php'; ?>
