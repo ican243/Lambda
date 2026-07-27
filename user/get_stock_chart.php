@@ -1,11 +1,6 @@
 <?php
+// 종목 차트 데이터 — 비로그인도 차트를 볼 수 있게 공개.
 require_once 'func.php';
-startUserSession();
-
-if (!isLoggedIn()) {
-    http_response_code(401);
-    exit;
-}
 
 $stockCode = trim($_GET['stock_code'] ?? '');
 header('Content-Type: application/json');

@@ -1,0 +1,479 @@
+/* ============================================================
+   toss.css — 토스증권 느낌의 디자인 시스템
+   색·간격·폰트를 CSS 변수로 정의해두고 전체에서 재사용한다.
+   ============================================================ */
+
+/* ---------- 1. 폰트 (로컬 Pretendard) ---------- */
+@font-face {
+    font-family: 'Pretendard';
+    font-weight: 400;
+    font-display: swap;
+    src: url('fonts/Pretendard-Regular.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Pretendard';
+    font-weight: 500;
+    font-display: swap;
+    src: url('fonts/Pretendard-Medium.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Pretendard';
+    font-weight: 600;
+    font-display: swap;
+    src: url('fonts/Pretendard-SemiBold.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Pretendard';
+    font-weight: 700;
+    font-display: swap;
+    src: url('fonts/Pretendard-Bold.woff2') format('woff2');
+}
+
+/* ---------- 2. 색·간격 변수 (토스 팔레트) ---------- */
+:root {
+    --bg: #f2f4f6;          /* 페이지 배경 (연한 회색) */
+    --card: #ffffff;        /* 카드 배경 */
+    --text: #191f28;        /* 기본 글자 (거의 검정) */
+    --text-sub: #8b95a1;    /* 보조 글자 (회색) */
+    --line: #e5e8eb;        /* 구분선 */
+    --primary: #3182f6;     /* 토스 블루 (버튼/포인트) */
+    --primary-weak: #e8f3ff;/* 블루 배경 연하게 */
+    --up: #f04452;          /* 상승 = 빨강 (한국식) */
+    --down: #3182f6;        /* 하락 = 파랑 (한국식) */
+    --radius: 16px;
+    --radius-lg: 20px;
+    --shadow: 0 2px 8px rgba(0, 23, 51, 0.04), 0 1px 2px rgba(0, 23, 51, 0.06);
+}
+
+/* ---------- 3. 기본 리셋 ---------- */
+* { box-sizing: border-box; }
+
+body {
+    font-family: 'Pretendard', -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+    letter-spacing: -0.02em;   /* 토스 특유의 좁은 자간 */
+}
+
+/* 앱처럼 가운데 정렬된 좁은 컨테이너 */
+.app {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 0 20px 120px;   /* 하단 고정바 공간 확보 */
+    min-height: 100vh;
+}
+
+/* ---------- 4. 상단바 ---------- */
+.topbar {
+    max-width: 480px;
+    margin: 0 auto;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+}
+.topbar .brand {
+    font-weight: 700;
+    font-size: 20px;
+    color: var(--text);
+    text-decoration: none;
+}
+.topbar .brand b { color: var(--primary); }
+
+/* ---------- 5. 공통 요소 ---------- */
+.card-t {
+    background: var(--card);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    padding: 20px;
+    margin-bottom: 16px;
+}
+.muted { color: var(--text-sub); }
+.up   { color: var(--up); }
+.down { color: var(--down); }
+.section-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-sub);
+    margin: 24px 4px 12px;
+}
+
+/* ---------- 6. 버튼 ---------- */
+.btn-t {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: none;
+    border-radius: 14px;
+    font-family: inherit;
+    font-weight: 600;
+    font-size: 16px;
+    padding: 14px 20px;
+    cursor: pointer;
+    transition: transform .05s ease, background .15s ease;
+    letter-spacing: -0.02em;
+}
+.btn-t:active { transform: scale(0.98); }
+.btn-primary-t { background: var(--primary); color: #fff; }
+.btn-primary-t:hover { background: #1b74e4; }
+.btn-red-t  { background: var(--up);   color: #fff; }
+.btn-blue-t { background: var(--down); color: #fff; }
+.btn-ghost-t { background: #f2f4f6; color: var(--text); }
+.btn-block { width: 100%; }
+
+/* ---------- 7. 입력창 ---------- */
+.input-t {
+    width: 100%;
+    border: none;
+    background: #f2f4f6;
+    border-radius: 14px;
+    padding: 15px 16px;
+    font-family: inherit;
+    font-size: 16px;
+    color: var(--text);
+    outline: none;
+    transition: box-shadow .15s ease;
+}
+.input-t:focus { box-shadow: 0 0 0 2px var(--primary) inset; background: #fff; }
+.input-t::placeholder { color: #b0b8c1; }
+.label-t { display:block; font-size:13px; font-weight:600; color:var(--text-sub); margin: 0 4px 8px; }
+
+/* ---------- 8. 종목 리스트 (토스식 행) ---------- */
+.stock-list { background: var(--card); border-radius: var(--radius-lg); box-shadow: var(--shadow); overflow: hidden; }
+.stock-row {
+    display: flex;
+    align-items: center;
+    padding: 16px;
+    text-decoration: none;
+    color: inherit;
+    border-bottom: 1px solid var(--line);
+    transition: background .12s ease;
+}
+.stock-row:last-child { border-bottom: none; }
+.stock-row:active { background: #f9fafb; }
+.stock-logo {
+    position: relative;
+    width: 40px; height: 40px;
+    border-radius: 12px;
+    background: var(--primary-weak);
+    color: var(--primary);
+    font-weight: 700;
+    font-size: 15px;
+    display: flex; align-items: center; justify-content: center;
+    margin-right: 14px;
+    flex-shrink: 0;
+    overflow: hidden;   /* 실제 로고 이미지가 모서리 밖으로 안 나가게 */
+}
+/* 실제 로고 이미지(있을 때). 로드 실패하면 onerror로 제거 → 아래 글자 노출 */
+.stock-logo img {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    background: #fff;
+}
+.stock-name { flex: 1; min-width: 0; }
+.stock-name .nm { font-weight: 600; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stock-name .cd { font-size: 13px; color: var(--text-sub); margin-top: 2px; }
+.stock-price { text-align: right; flex-shrink: 0; }
+.stock-price .pr { font-weight: 700; font-size: 16px; }
+.stock-price .rt { font-size: 13px; margin-top: 2px; font-weight: 500; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* 가격 변동 시 잠깐 반짝이는 효과 */
+@keyframes flashUp   { from { background: rgba(240,68,82,.12); } to { background: transparent; } }
+@keyframes flashDown { from { background: rgba(49,130,246,.12); } to { background: transparent; } }
+.flash-up   { animation: flashUp .6s ease; }
+.flash-down { animation: flashDown .6s ease; }
+
+/* ---------- 9. 검색 ---------- */
+.search-result { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); margin-top: 8px; overflow: hidden; }
+.search-item { display:flex; align-items:center; justify-content:space-between; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.search-item:last-child { border-bottom: none; }
+.search-item .plus { color: var(--primary); font-weight: 600; font-size: 14px; cursor: pointer; background:none; border:none; }
+
+/* ---------- 10. 하단 고정 매수/매도 바 ---------- */
+.bottom-bar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: var(--card);
+    border-top: 1px solid var(--line);
+    padding: 12px 20px calc(12px + env(safe-area-inset-bottom));
+}
+.bottom-bar .inner { max-width: 480px; margin: 0 auto; display: flex; gap: 10px; }
+
+/* ---------- 11. 큰 가격 헤더 (상세 페이지) ---------- */
+.price-hero .nm { font-size: 15px; color: var(--text-sub); font-weight: 600; }
+.price-hero .pr { font-size: 34px; font-weight: 700; margin: 6px 0 4px; }
+.price-hero .rt { font-size: 15px; font-weight: 600; }
+
+/* ---------- 12. 알림 배너 ---------- */
+.alert-t { padding: 14px 16px; border-radius: 14px; font-size: 14px; font-weight: 500; margin-bottom: 16px; }
+.alert-ok  { background: #e8f7ee; color: #12b76a; }
+.alert-err { background: #fdecee; color: var(--up); }
+
+/* ---------- 13. 세그먼트 토글 (캔들/라인) ---------- */
+.seg { display: inline-flex; background: #f2f4f6; border-radius: 12px; padding: 4px; gap: 4px; }
+.seg button { border: none; background: none; padding: 7px 16px; border-radius: 9px; font-family: inherit; font-weight: 600; font-size: 14px; color: var(--text-sub); cursor: pointer; }
+.seg button.on { background: #fff; color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+
+/* ============================================================
+   14. 데스크탑 네비게이션 + 대시보드 레이아웃
+   ============================================================ */
+.nav {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(255,255,255,.85);
+    backdrop-filter: saturate(180%) blur(12px);
+    border-bottom: 1px solid var(--line);
+}
+.nav-inner {
+    max-width: 1180px; margin: 0 auto;
+    height: 60px; padding: 0 20px;
+    display: flex; align-items: center; gap: 22px;
+}
+.nav .brand { font-weight: 800; font-size: 20px; color: var(--text); text-decoration: none; white-space: nowrap; }
+.nav .brand b { color: var(--primary); }
+.nav-menu { display: flex; gap: 20px; }
+.nav-link { color: #4e5968; text-decoration: none; font-weight: 600; font-size: 15px; white-space: nowrap; }
+.nav-link:hover { color: var(--primary); }
+
+.nav-search { position: relative; flex: 1; max-width: 360px; margin-left: auto; }
+.nav-search input {
+    width: 100%; border: none; background: #f2f4f6; border-radius: 12px;
+    padding: 10px 14px; font-family: inherit; font-size: 14px; color: var(--text); outline: none;
+}
+.nav-search input:focus { box-shadow: 0 0 0 2px var(--primary) inset; background: #fff; }
+.nav-search-results {
+    display: none; position: absolute; top: 46px; left: 0; right: 0;
+    background: #fff; border-radius: 14px; box-shadow: 0 8px 30px rgba(0,23,51,.14);
+    overflow: hidden; z-index: 200;
+}
+.nav-search-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; text-decoration: none; color: var(--text); font-weight: 600; font-size: 14px; border-bottom: 1px solid var(--line); }
+.nav-search-item:last-child { border-bottom: none; }
+.nav-search-item:hover { background: #f9fafb; }
+
+.nav-login { background: var(--primary); color: #fff; text-decoration: none; font-weight: 700; font-size: 14px; padding: 9px 16px; border-radius: 10px; white-space: nowrap; }
+.nav-logout { color: var(--text-sub); text-decoration: none; font-weight: 600; font-size: 14px; white-space: nowrap; }
+.nav-user { font-weight: 700; font-size: 14px; white-space: nowrap; }
+
+/* 넓은 대시보드 컨테이너 */
+.app-wide { max-width: 1180px; margin: 0 auto; padding: 28px 20px 80px; }
+.app-xwide { max-width: 1560px; margin: 0 auto; padding: 24px 28px 80px; }   /* 종목 상세: 토스처럼 넓게 */
+
+/* 대시보드 2단 그리드: 메인 + 우측 랭킹 */
+.dash { display: grid; grid-template-columns: 1fr 320px; gap: 24px; align-items: start; }
+
+/* 페이지 큰 제목 */
+.page-title { font-size: 26px; font-weight: 800; margin: 0 0 4px; }
+.page-sub { color: var(--text-sub); font-size: 15px; margin: 0 0 20px; }
+
+/* 시장 요약 스트립 (주요 종목 가로 나열) */
+.market-strip { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(150px, 1fr); gap: 12px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 24px; }
+.market-card { background: var(--card); border-radius: 16px; box-shadow: var(--shadow); padding: 14px 16px; text-decoration: none; color: inherit; }
+.market-card .mc-nm { font-size: 13px; color: var(--text-sub); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.market-card .mc-pr { font-size: 18px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.market-card .mc-rt { font-size: 13px; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
+
+/* 순위 리스트 (번호 포함) */
+.rank { width: 26px; text-align: center; font-weight: 700; font-size: 15px; color: var(--text-sub); margin-right: 8px; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.rank.top { color: var(--primary); }
+.stock-row .sub-info { font-size: 12px; color: var(--text-sub); margin-top: 2px; }
+
+/* 우측 랭킹 사이드바 */
+.side { position: sticky; top: 80px; }
+.side .side-head { display: flex; align-items: center; justify-content: space-between; margin: 0 4px 12px; }
+.side .side-head .t { font-weight: 700; font-size: 16px; }
+.side .side-head .time { font-size: 12px; color: var(--text-sub); }
+.side-note { font-size: 12px; color: var(--text-sub); margin: 10px 4px 0; line-height: 1.4; }
+
+/* 탭 (전체/급등/급락) */
+.tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+.tabs button { border: none; background: #f2f4f6; color: var(--text-sub); font-family: inherit; font-weight: 600; font-size: 13px; padding: 8px 14px; border-radius: 10px; cursor: pointer; }
+.tabs button.on { background: var(--text); color: #fff; }
+
+/* 반응형: 좁아지면 사이드바를 아래로, 네비 메뉴 숨김 */
+@media (max-width: 900px) {
+    .dash { grid-template-columns: 1fr; }
+    .side { position: static; }
+    .nav-menu { display: none; }
+    .nav-search { max-width: none; }
+}
+
+/* ============================================================
+   15. 종목 상세 데스크탑 2단 레이아웃 (좌 차트 + 우 주문패널)
+   ============================================================ */
+.detail-grid { display: grid; grid-template-columns: 1fr 340px; gap: 24px; align-items: start; }
+.order-panel { position: sticky; top: 80px; background: var(--card); border-radius: var(--radius-lg); box-shadow: var(--shadow); padding: 20px; }
+.order-panel .op-title { font-weight: 700; font-size: 17px; margin-bottom: 4px; }
+.order-panel .op-cash { display: flex; justify-content: space-between; align-items: center; padding: 12px 0 16px; border-bottom: 1px solid var(--line); margin-bottom: 16px; }
+.order-panel .op-cash .v { font-weight: 700; font-variant-numeric: tabular-nums; }
+.order-est { display: flex; justify-content: space-between; font-size: 14px; color: var(--text-sub); margin: 14px 2px 4px; }
+.order-est .v { font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 900px) {
+    .detail-grid { grid-template-columns: 1fr; }
+    .order-panel { position: static; }
+}
+
+/* ============================================================
+   16. 종목 자동완성 (이름으로 검색 → 코드 자동 입력)
+   ============================================================ */
+.ac-wrap { position: relative; }
+.ac-results {
+    display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+    background: var(--card); border-radius: 12px;
+    box-shadow: 0 8px 30px rgba(0,23,51,.16);
+    overflow: hidden auto; max-height: 280px; z-index: 50;
+}
+.ac-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; cursor: pointer; border-bottom: 1px solid var(--line); }
+.ac-item:last-child { border-bottom: none; }
+.ac-item:hover { background: var(--primary-weak); }
+.ac-item .anm { font-weight: 600; font-size: 15px; }
+.ac-item .acd { color: var(--text-sub); font-size: 12px; }
+.ac-picked { font-size: 13px; font-weight: 600; color: var(--primary); }
+
+/* ============================================================
+   17. 종목 상세 v2 — 토스형 위젯 그리드 (지표 스트립 + 호가/체결/수급)
+   ============================================================ */
+.dv-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:16px; }
+.dv-title { display:flex; align-items:center; gap:12px; }
+.dv-logo { position:relative; width:42px; height:42px; border-radius:12px; display:inline-flex; align-items:center; justify-content:center; font-weight:800; color:#fff; font-size:15px; flex:none; overflow:hidden; }
+.dv-logo img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+
+/* 지표 스트립 */
+.metric-strip { display:grid; grid-template-columns:repeat(4,1fr); gap:0; background:var(--card); border-radius:var(--radius-lg); box-shadow:var(--shadow); padding:16px 8px; margin-bottom:18px; }
+.metric { display:flex; flex-direction:column; gap:8px; padding:2px 20px; }
+.metric + .metric { border-left:1px solid var(--line); }
+.metric .mk { font-size:12px; color:var(--text-sub); font-weight:600; }
+.metric .mv { font-size:15px; font-weight:700; font-variant-numeric:tabular-nums; }
+.range-row { display:flex; align-items:center; gap:8px; font-size:11px; color:var(--text-sub); font-variant-numeric:tabular-nums; }
+.range-bar { position:relative; flex:1; height:4px; border-radius:2px; background:linear-gradient(90deg,var(--down) 0%,#c9d2dc 50%,var(--up) 100%); }
+.range-bar .dot { position:absolute; top:50%; width:9px; height:9px; border-radius:50%; background:var(--text); border:2px solid #fff; transform:translate(-50%,-50%); box-shadow:0 0 0 1px var(--line); }
+
+/* 탭 + 편집 툴바 */
+.dv-bar { display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--line); margin-bottom:22px; }
+.dv-tabs { display:flex; }
+.dv-tabs button { border:none; background:none; padding:12px 2px; margin-right:22px; font-family:inherit; font-size:15px; font-weight:700; color:var(--text-sub); cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; }
+.dv-tabs button.on { color:var(--text); border-bottom-color:var(--text); }
+.dv-tools { display:flex; align-items:center; gap:12px; padding-bottom:6px; }
+.dv-hint { display:inline-flex; align-items:center; gap:5px; font-size:12px; color:var(--text-sub); font-weight:600; }
+.dv-reset { border:1px solid var(--line); background:var(--card); color:var(--text-sub); font-family:inherit; font-size:12px; font-weight:700; padding:7px 12px; border-radius:9px; cursor:pointer; transition:.15s; }
+.dv-reset:hover { background:#f2f4f6; color:var(--text); }
+
+/* 위젯 그리드 — 순서 재배열(자동 흐름) */
+.dv-grid { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); grid-auto-flow:row dense; gap:20px; align-items:start; }
+.widget { background:var(--card); border-radius:var(--radius-lg); box-shadow:var(--shadow); padding:18px 20px; min-width:0; }
+.widget[data-w="chart"] { grid-column:span 2; }         /* 차트만 2칸 넓게 */
+.widget-h { font-size:15px; font-weight:700; margin:-2px 0 14px; padding-bottom:12px; border-bottom:1px solid #f2f4f6; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+.widget-h .wt { display:inline-flex; align-items:center; gap:8px; min-width:0; }
+.widget-h .wh-right { display:inline-flex; align-items:center; gap:10px; flex:none; }
+.widget-h .live { font-size:11px; font-weight:700; color:var(--text-sub); display:inline-flex; align-items:center; gap:5px; }
+.live .blip { width:6px; height:6px; border-radius:50%; background:#c9d2dc; }
+.live.on { color:var(--up); }
+.live.on .blip { background:var(--up); animation:blip 1.2s infinite; }
+@keyframes blip { 0%,100%{opacity:1} 50%{opacity:.25} }
+
+/* 드래그 핸들 + 드래그 상태 */
+.drag-handle { display:inline-flex; align-items:center; justify-content:center; color:#c9d2dc; cursor:grab; padding:2px; border-radius:6px; flex:none; transition:.15s; }
+.drag-handle:hover { color:var(--text-sub); background:#f2f4f6; }
+.drag-handle:active { cursor:grabbing; }
+.w-ghost { opacity:.4; }
+.w-ghost > * { visibility:hidden; }
+.w-chosen { box-shadow:0 12px 32px rgba(0,23,51,.18); }
+.w-drag { transform:rotate(1deg); }
+
+/* 커뮤니티 위젯 */
+.widget[data-w="community"] { grid-column:span 2; }   /* 글이라 넓게 */
+.post-list { display:flex; flex-direction:column; max-height:280px; overflow-y:auto; margin-bottom:14px; }
+.post-item { padding:11px 2px; border-bottom:1px solid #f2f4f6; }
+.post-item:last-child { border-bottom:none; }
+.post-item .pmeta { font-size:11px; color:var(--text-sub); font-weight:600; margin-bottom:4px; display:flex; gap:8px; }
+.post-item .pmeta b { color:var(--text); font-weight:700; }
+.post-item .pbody { font-size:14px; line-height:1.5; word-break:break-word; }
+.post-empty { color:var(--text-sub); font-size:13px; text-align:center; padding:28px 0; line-height:1.6; }
+.post-form { display:flex; gap:8px; align-items:stretch; }
+.post-form textarea { flex:1; resize:none; height:42px; min-height:42px; border:1px solid var(--line); border-radius:12px; padding:10px 14px; font-family:inherit; font-size:14px; background:#f9fafb; transition:.15s; }
+.post-form textarea:focus { outline:none; background:#fff; box-shadow:0 0 0 2px var(--primary) inset; }
+
+/* 호가창 */
+.ob-row { display:grid; grid-template-columns:1fr 88px; align-items:center; height:26px; font-size:12px; font-variant-numeric:tabular-nums; }
+.ob-price { text-align:right; padding-right:10px; font-weight:700; }
+.ob-qty { position:relative; height:22px; display:flex; align-items:center; }
+.ob-qty .bar { position:absolute; top:1px; bottom:1px; right:0; border-radius:3px; }
+.ob-qty .num { position:relative; z-index:1; font-size:11px; color:var(--text-sub); padding-left:6px; }
+.ob-ask .bar { background:rgba(49,130,246,.13); }
+.ob-bid .bar { background:rgba(240,68,82,.13); }
+.ob-ask .ob-price { color:var(--down); }
+.ob-bid .ob-price { color:var(--up); }
+.ob-mid { text-align:center; padding:9px 0; margin:6px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); font-weight:700; font-size:16px; font-variant-numeric:tabular-nums; }
+.ob-total { display:flex; justify-content:space-between; font-size:11px; color:var(--text-sub); margin-top:10px; font-variant-numeric:tabular-nums; }
+.ob-total b { color:var(--text); font-weight:700; }
+
+/* 체결내역 / 수급 표 공통 */
+.mini-tbl { width:100%; font-size:12px; font-variant-numeric:tabular-nums; border-collapse:collapse; }
+.mini-tbl th { color:var(--text-sub); font-weight:600; text-align:right; padding:5px 6px; font-size:11px; }
+.mini-tbl th:first-child { text-align:left; }
+.mini-tbl td { text-align:right; padding:5px 6px; }
+.mini-tbl td:first-child { text-align:left; color:var(--text-sub); }
+.mini-tbl tbody tr { border-top:1px solid #f2f4f6; }
+.tick-scroll { max-height:300px; overflow-y:auto; }
+
+/* 종목정보 표 */
+.info-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:0 44px; }
+.info-row { display:flex; justify-content:space-between; padding:13px 2px; border-bottom:1px solid var(--line); font-size:14px; }
+.info-row .k { color:var(--text-sub); }
+.info-row .v { font-weight:600; font-variant-numeric:tabular-nums; }
+
+/* 창 크기에 매끄럽게 반응: 넓으면 3열 → 중간 2열 → 좁으면 1열.
+   각 칸은 minmax(0,1fr)이라 창을 늘렸다 줄일 때 폭이 부드럽게 흐른다. */
+.widget { transition: box-shadow .2s ease; }
+.app-xwide { transition: max-width .2s ease; }
+
+@media (max-width: 1180px) {
+    .dv-grid { grid-template-columns:repeat(2, minmax(0,1fr)); }
+    .widget[data-w="chart"] { grid-column:span 2; }        /* 차트는 항상 한 줄 꽉 */
+    .widget[data-w="community"] { grid-column:span 2; }
+    .dv-hint { display:none; }
+}
+@media (max-width: 720px) {
+    .dv-grid { grid-template-columns:1fr; }
+    .widget[data-w="chart"], .widget[data-w="community"] { grid-column:span 1; }
+    .metric-strip { grid-template-columns:repeat(2,1fr); row-gap:16px; }
+    .metric:nth-child(2n+1) { border-left:none; }
+    .info-grid { grid-template-columns:1fr; }
+    .app-xwide { padding:16px 14px 60px; }
+    .dv-bar { flex-wrap:wrap; gap:8px; }
+}
+@media (max-width: 460px) {
+    .metric-strip { grid-template-columns:1fr; }
+    .metric { border-left:none !important; }
+    .price-hero .pr { font-size:28px; }
+}
+
+/* ============================================================
+   18. gridstack 위젯 대시보드 (이동 + 칸단위 리사이즈)
+   ============================================================ */
+.grid-stack-item-content { display: flex; overflow: visible; }   /* 간격(margin)은 gridstack이 처리 */
+.grid-stack .widget { flex: 1 1 auto; width: 100%; display: flex; flex-direction: column; overflow: hidden; margin: 0; }
+
+/* 위젯 본문이 남는 높이를 채우고, 넘치면 그 안에서 스크롤 */
+.grid-stack #chart-container { flex: 1 1 auto; min-height: 120px; }
+.grid-stack #orderbook,
+.grid-stack .tick-scroll,
+.grid-stack #post-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; max-height: none; }
+.grid-stack .widget[data-w="community"] .post-form { margin-top: auto; }
+
+/* 드래그/리사이즈 중 카드 강조 */
+.grid-stack-item-content { transition: box-shadow .15s ease; }
+.grid-stack-item.ui-draggable-dragging .grid-stack-item-content,
+.grid-stack-item.ui-resizable-resizing .grid-stack-item-content { box-shadow: 0 14px 36px rgba(0,23,51,.20); }
+
+/* 우하단 리사이즈 그립 표시 */
+.grid-stack-item > .ui-resizable-se { width: 16px; height: 16px; right: 6px; bottom: 6px; background: none; }
+.grid-stack-item > .ui-resizable-se::after {
+    content: ''; position: absolute; right: 0; bottom: 0; width: 9px; height: 9px;
+    border-right: 2px solid #c9d2dc; border-bottom: 2px solid #c9d2dc; border-bottom-right-radius: 3px;
+}
+.grid-stack-item:hover > .ui-resizable-se::after { border-color: var(--text-sub); }

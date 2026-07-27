@@ -2,6 +2,7 @@
 // user/func.php - 유저 전용 공용 함수 모음
 
 require_once __DIR__ . '/../config/db.php';   // DB 연결($conn) 가져오기
+require_once __DIR__ . '/../config/app.php';  // 공용 운영계층(로깅·점검·공지)
 
 // -----------------------------
 // 1. 유저 세션 시작
@@ -102,6 +103,18 @@ function removeWatchlist($conn, $userId, $stockCode)
 }
 
 // -----------------------------
+// 8-1. 특정 종목이 내 관심종목인지 확인
+// -----------------------------
+function isInWatchlist($conn, $userId, $stockCode)
+{
+    $stmt = mysqli_prepare($conn, "SELECT 1 FROM watchlist WHERE user_id = ? AND stock_code = ?");
+    mysqli_stmt_bind_param($stmt, "is", $userId, $stockCode);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    return mysqli_num_rows($result) > 0;
+}
+
+// -----------------------------
 // 9. 내 관심종목의 최신 시세
 // -----------------------------
 function getMyWatchlistPrices($conn, $userId)
@@ -144,14 +157,113 @@ function getStockLogsForCsv($conn, $stockCode)
     return $logs;
 }
 
+// -----------------------------
+// [홈 대시보드] 인기종목 = 거래대금(현재가 × 거래량) 상위
+// 로그인 여부와 무관하게 누구나 조회 가능
+// -----------------------------
+function getPopularStocks($conn, $limit = 100)
+{
+    $limit = (int) $limit;
+    // 실제 누적거래대금(trade_value) 기준 정렬 → 토스/한투와 순위 일치.
+    // (아직 trade_value가 0인 종목은 price*volume 근사로 보조 정렬)
+    $sql = "
+        SELECT sl.stock_code,
+               COALESCE(sm.stock_name, sl.stock_name, sl.stock_code) AS stock_name,
+               sm.market, sl.price, sl.change_price, sl.change_rate, sl.volume,
+               sl.trade_value
+        FROM stock_latest sl
+        LEFT JOIN stock_master sm ON sm.stock_code = sl.stock_code
+        WHERE sl.price > 0
+        ORDER BY (CASE WHEN sl.trade_value > 0 THEN sl.trade_value ELSE sl.price * sl.volume END) DESC
+        LIMIT $limit
+    ";
+    $result = mysqli_query($conn, $sql);
+    $rows = [];
+    while ($row = mysqli_fetch_assoc($result)) $rows[] = $row;
+    return $rows;
+}
+
+// -----------------------------
+// [홈 대시보드] 급등/급락 종목
+// $dir = 'up'  → 등락률 높은 순(급등)
+// $dir = 'down'→ 등락률 낮은 순(급락)
+// -----------------------------
+function getTopMovers($conn, $dir = 'up', $limit = 10)
+{
+    $limit = (int) $limit;
+    $order = ($dir === 'down') ? 'ASC' : 'DESC';
+    $sql = "
+        SELECT sl.stock_code,
+               COALESCE(sm.stock_name, sl.stock_name, sl.stock_code) AS stock_name,
+               sm.market, sl.price, sl.change_price, sl.change_rate, sl.volume
+        FROM stock_latest sl
+        LEFT JOIN stock_master sm ON sm.stock_code = sl.stock_code
+        WHERE sl.price > 0
+        ORDER BY sl.change_rate $order
+        LIMIT $limit
+    ";
+    $result = mysqli_query($conn, $sql);
+    $rows = [];
+    while ($row = mysqli_fetch_assoc($result)) $rows[] = $row;
+    return $rows;
+}
+
+// -----------------------------
+// [조회수] 종목 상세를 열 때 1 증가 (많이 본 종목 집계용)
+// -----------------------------
+function recordStockView($conn, $stockCode)
+{
+    $stmt = mysqli_prepare($conn, "
+        INSERT INTO stock_views (stock_code, view_count)
+        VALUES (?, 1)
+        ON DUPLICATE KEY UPDATE view_count = view_count + 1
+    ");
+    mysqli_stmt_bind_param($stmt, "s", $stockCode);
+    return mysqli_stmt_execute($stmt);
+}
+
+// -----------------------------
+// [홈 대시보드 우측] 많이 본 종목 = 조회수 상위
+// 시세가 있는(stock_latest) 종목만 → 가격까지 함께 렌더 가능.
+// 아직 조회 데이터가 없으면 빈 배열 반환(프론트에서 급상승으로 폴백).
+// -----------------------------
+function getMostViewedStocks($conn, $limit = 15)
+{
+    $limit = (int) $limit;
+    $sql = "
+        SELECT sl.stock_code,
+               COALESCE(sm.stock_name, sl.stock_name, sl.stock_code) AS stock_name,
+               sm.market, sl.price, sl.change_price, sl.change_rate, sl.volume,
+               sv.view_count
+        FROM stock_views sv
+        JOIN stock_latest sl ON sl.stock_code = sv.stock_code
+        LEFT JOIN stock_master sm ON sm.stock_code = sv.stock_code
+        WHERE sl.price > 0 AND sv.view_count > 0
+        ORDER BY sv.view_count DESC
+        LIMIT $limit
+    ";
+    $result = mysqli_query($conn, $sql);
+    $rows = [];
+    while ($row = mysqli_fetch_assoc($result)) $rows[] = $row;
+    return $rows;
+}
+
 //신규 계좌 생성
+
+// 신규 가입 시 지급되는 초기 예수금 (관리자 설정 app_settings.initial_cash, 없으면 1,000만)
+function getInitialCashAmount($conn)
+{
+    $initial = 10000000;
+    $res = @mysqli_query($conn, "SELECT svalue FROM app_settings WHERE skey = 'initial_cash'");
+    if ($res && ($row = mysqli_fetch_assoc($res))) $initial = (int) $row['svalue'];
+    return $initial;
+}
 
 function createAccount($conn, $userId)
 {
-    $stmt = mysqli_prepare($conn, "
-        INSERT INTO accounts (user_id, cash_balance) VALUES (?, 10000000)
-    ");
-    mysqli_stmt_bind_param($stmt, "i", $userId);
+    $initial = getInitialCashAmount($conn);
+    $stmt = mysqli_prepare($conn, "INSERT INTO accounts (user_id, cash_balance) VALUES (?, ?)");
+    mysqli_stmt_bind_param($stmt, "ii", $userId, $initial);
     return mysqli_stmt_execute($stmt);
 }
 
@@ -301,7 +413,7 @@ function getMyAccount($conn, $userId)
     // 계좌가 없으면 자동으로 하나 만들어줌 (예외 상황 방어)
     if (!$account) {
         createAccount($conn, $userId);
-        return ['cash_balance' => 10000000];
+        return ['cash_balance' => getInitialCashAmount($conn)];
     }
 
     return $account;
@@ -402,4 +514,55 @@ function getCandleData($conn, $stockCode)
     }
 
     return $candles;
+}
+
+// -----------------------------
+// [커뮤니티] 종목별 게시글
+//   테이블이 없으면 자동 생성 → 형이 별도 마이그레이션 안 돌려도 됨.
+// -----------------------------
+function ensurePostsTable($conn)
+{
+    mysqli_query($conn, "
+        CREATE TABLE IF NOT EXISTS stock_posts (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            stock_code VARCHAR(20) NOT NULL,
+            user_id INT NOT NULL,
+            nickname VARCHAR(50) NOT NULL,
+            content VARCHAR(500) NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_code_time (stock_code, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+}
+
+function getStockPosts($conn, $stockCode, $limit = 30)
+{
+    ensurePostsTable($conn);
+    $limit = (int) $limit;
+    $stmt = mysqli_prepare($conn, "
+        SELECT nickname, content, created_at
+        FROM stock_posts WHERE stock_code = ?
+        ORDER BY created_at DESC LIMIT $limit
+    ");
+    mysqli_stmt_bind_param($stmt, "s", $stockCode);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    $rows = [];
+    while ($row = mysqli_fetch_assoc($result)) $rows[] = $row;
+    return $rows;
+}
+
+function addStockPost($conn, $stockCode, $userId, $nickname, $content)
+{
+    ensurePostsTable($conn);
+    $content = trim($content);
+    if ($content === '') return false;
+    $content = mb_substr($content, 0, 500);
+    $nickname = $nickname ?: '익명';
+    $stmt = mysqli_prepare($conn, "
+        INSERT INTO stock_posts (stock_code, user_id, nickname, content)
+        VALUES (?, ?, ?, ?)
+    ");
+    mysqli_stmt_bind_param($stmt, "siss", $stockCode, $userId, $nickname, $content);
+    return mysqli_stmt_execute($stmt);
 }

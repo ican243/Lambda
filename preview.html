@@ -1,0 +1,175 @@
+<title>모아증권 — 홈 대시보드 미리보기</title>
+<style>
+  :root {
+    --bg:#f2f4f6; --card:#fff; --text:#191f28; --sub:#8b95a1; --line:#e5e8eb;
+    --primary:#3182f6; --primary-weak:#e8f3ff; --up:#f04452; --down:#3182f6;
+    --nav:rgba(255,255,255,.85); --field:#f2f4f6;
+    --shadow:0 2px 8px rgba(0,23,51,.05);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#141518; --card:#1e1f24; --text:#f2f4f6; --sub:#8b95a1; --line:#2a2c33;
+      --primary:#4593fc; --primary-weak:#1b2a44; --nav:rgba(24,25,29,.85); --field:#2a2c33;
+      --shadow:0 2px 10px rgba(0,0,0,.4); }
+  }
+  :root[data-theme="dark"]{ --bg:#141518; --card:#1e1f24; --text:#f2f4f6; --sub:#8b95a1; --line:#2a2c33;
+      --primary:#4593fc; --primary-weak:#1b2a44; --nav:rgba(24,25,29,.85); --field:#2a2c33; --shadow:0 2px 10px rgba(0,0,0,.4); }
+  :root[data-theme="light"]{ --bg:#f2f4f6; --card:#fff; --text:#191f28; --sub:#8b95a1; --line:#e5e8eb;
+      --primary:#3182f6; --primary-weak:#e8f3ff; --up:#f04452; --down:#3182f6; --nav:rgba(255,255,255,.85); --field:#f2f4f6; --shadow:0 2px 8px rgba(0,23,51,.05); }
+
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif;
+    letter-spacing:-.02em;-webkit-font-smoothing:antialiased;line-height:1.5;}
+  .up{color:var(--up);} .down{color:var(--down);} .muted{color:var(--sub);}
+  a{color:inherit;}
+
+  /* 네비 */
+  .nav{position:sticky;top:0;z-index:50;background:var(--nav);backdrop-filter:saturate(180%) blur(12px);border-bottom:1px solid var(--line);}
+  .nav-in{max-width:1180px;margin:0 auto;height:60px;padding:0 20px;display:flex;align-items:center;gap:22px;}
+  .brand{font-weight:800;font-size:20px;text-decoration:none;white-space:nowrap;}
+  .brand b{color:var(--primary);}
+  .menu{display:flex;gap:20px;}
+  .menu a{color:#4e5968;text-decoration:none;font-weight:600;font-size:15px;}
+  :root[data-theme="dark"] .menu a{color:#adb5bd;}
+  @media (prefers-color-scheme: dark){ .menu a{color:#adb5bd;} }
+  .search{flex:1;max-width:360px;margin-left:auto;}
+  .search input{width:100%;border:none;background:var(--field);border-radius:12px;padding:10px 14px;font-size:14px;color:var(--text);font-family:inherit;}
+  .login{background:var(--primary);color:#fff;text-decoration:none;font-weight:700;font-size:14px;padding:9px 16px;border-radius:10px;white-space:nowrap;}
+
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 20px 60px;}
+  .h1{font-size:26px;font-weight:800;margin:0 0 4px;}
+  .psub{color:var(--sub);font-size:15px;margin:0 0 20px;}
+
+  /* 시장 스트립 */
+  .strip{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(150px,1fr);gap:12px;overflow-x:auto;padding-bottom:4px;margin-bottom:26px;}
+  .mcard{background:var(--card);border-radius:16px;box-shadow:var(--shadow);padding:14px 16px;text-decoration:none;}
+  .mcard .n{font-size:13px;color:var(--sub);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .mcard .p{font-size:18px;font-weight:700;margin-top:4px;font-variant-numeric:tabular-nums;}
+  .mcard .r{font-size:13px;font-weight:600;margin-top:2px;font-variant-numeric:tabular-nums;}
+
+  .dash{display:grid;grid-template-columns:1fr 320px;gap:24px;align-items:start;}
+  .tabs{display:flex;gap:6px;margin-bottom:14px;}
+  .tabs button{border:none;background:var(--field);color:var(--sub);font-family:inherit;font-weight:600;font-size:13px;padding:8px 14px;border-radius:10px;cursor:pointer;}
+  .tabs button.on{background:var(--text);color:var(--bg);}
+
+  .list{background:var(--card);border-radius:20px;box-shadow:var(--shadow);overflow:hidden;}
+  .row{display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line);text-decoration:none;}
+  .row:last-child{border-bottom:none;}
+  .rank{width:24px;text-align:center;font-weight:700;font-size:14px;color:var(--sub);margin-right:8px;font-variant-numeric:tabular-nums;}
+  .rank.top{color:var(--primary);}
+  .logo{width:38px;height:38px;border-radius:11px;background:var(--primary-weak);color:var(--primary);font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:center;margin-right:12px;flex-shrink:0;overflow:hidden;}
+  .nm{flex:1;min-width:0;}
+  .nm .t{font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .nm .c{font-size:12px;color:var(--sub);margin-top:1px;}
+  .pr{text-align:right;}
+  .pr .p{font-weight:800;font-size:15px;font-variant-numeric:tabular-nums;}
+  .pr .r{font-size:12px;margin-top:1px;font-weight:600;font-variant-numeric:tabular-nums;}
+
+  .side{position:sticky;top:80px;}
+  .side .head{display:flex;justify-content:space-between;align-items:center;margin:0 4px 12px;}
+  .side .head .t{font-weight:700;font-size:16px;}
+  .side .head .tm{font-size:12px;color:var(--sub);}
+
+  @media(max-width:900px){ .dash{grid-template-columns:1fr;} .side{position:static;} .menu{display:none;} }
+
+  /* 변경 요약 */
+  .changes{margin-top:52px;}
+  .changes h2{font-size:22px;font-weight:800;text-align:center;margin-bottom:6px;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-top:26px;}
+  .ch{background:var(--card);border-radius:18px;padding:20px;box-shadow:var(--shadow);}
+  .ch .k{font-size:12px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.04em;}
+  .ch .h{font-weight:800;font-size:16px;margin:8px 0 6px;}
+  .ch p{margin:0;color:var(--sub);font-size:14px;}
+  .ch code{background:var(--field);padding:1px 6px;border-radius:6px;font-size:12px;color:var(--text);}
+  .note{text-align:center;color:var(--sub);font-size:13px;margin-top:14px;}
+
+  .toggle{position:fixed;top:14px;right:14px;z-index:60;background:var(--card);border:1px solid var(--line);color:var(--text);border-radius:999px;padding:7px 13px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:var(--shadow);}
+</style>
+
+<button class="toggle" id="tg">🌗 테마</button>
+
+<nav class="nav">
+  <div class="nav-in">
+    <a href="#" class="brand">모아<b>증권</b></a>
+    <div class="menu"><a href="#">홈</a><a href="#">주식 골라보기</a></div>
+    <div class="search"><input placeholder="종목명을 검색하세요"></div>
+    <a href="#" class="login">로그인</a>
+  </div>
+</nav>
+
+<div class="wrap">
+  <div class="h1">실시간 인기 종목</div>
+  <p class="psub">거래대금이 많은 순서예요. 종목을 눌러 차트를 확인해보세요. · 로그인 없이도 열람 가능</p>
+
+  <div class="strip" id="strip"></div>
+
+  <div class="dash">
+    <div>
+      <div class="tabs"><button class="on" data-s="value">거래대금</button><button data-s="up">급등</button><button data-s="down">급락</button></div>
+      <div class="list" id="main"></div>
+    </div>
+    <aside class="side">
+      <div class="head"><span class="t">실시간 랭킹</span><span class="tm" id="tm"></span></div>
+      <div class="list" id="side"></div>
+    </aside>
+  </div>
+
+  <section class="changes">
+    <h2>이번에 바뀐 것</h2>
+    <p class="psub" style="text-align:center;">"실제로 굴러가게 + 로그인 없이 열람"</p>
+    <div class="grid">
+      <div class="ch"><div class="k">접근 권한</div><div class="h">홈·차트 공개 전환</div>
+        <p>index 들어가면 바로 로그인창 뜨던 걸 제거. 누구나 시세·차트를 봄. <code>매수/매도/관심등록</code>만 로그인 요구.</p></div>
+      <div class="ch"><div class="k">실제로 굴러가게</div><div class="h">3종목 → 20종목+</div>
+        <p>대형주 20개를 기본 추적. <code>관심종목</code>에 추가하면 WS가 <b>30초 내 자동 구독</b>. 하드코딩 3종목 한계 해결.</p></div>
+      <div class="ch"><div class="k">주문 안정성</div><div class="h">주문 REST 폴백</div>
+        <p>시세가 아직 없는 종목도 주문 시 <code>한투 REST</code>로 즉시 조회 후 체결. "시세 없음" 실패가 사라짐.</p></div>
+      <div class="ch"><div class="k">홈 화면</div><div class="h">토스식 데스크탑 대시보드</div>
+        <p>네비바 + 시장 스트립 + <code>거래대금/급등/급락</code> 순위 + 우측 실시간 랭킹. 초기 데이터는 서버가 심어 왕복 0.</p></div>
+      <div class="ch"><div class="k">동적 수집</div><div class="h">WS·cron 자동화</div>
+        <p><code>getSubscribeCodes()</code>로 기본종목 ∪ 관심종목을 동적 구독. cron도 동일 목록을 백업 수집.</p></div>
+      <div class="ch"><div class="k">우리 스타일</div><div class="h">모아증권</div>
+        <p>토스를 그대로 베끼지 않고 이름·톤을 우리 것으로. 친숙한 순위 리스트 패턴은 유지해 누구나 바로 이해.</p></div>
+    </div>
+    <p class="note">※ 실제 화면은 Pretendard 폰트로 더 또렷합니다. 데이터는 예시입니다. 우측 상단에서 다크모드도 확인해보세요.</p>
+  </section>
+</div>
+
+<script>
+  const root=document.documentElement;
+  document.getElementById('tg').onclick=()=>{const c=root.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');root.setAttribute('data-theme',c==='dark'?'light':'dark');};
+
+  // toss.png 실제 값 참고한 예시 데이터
+  const data=[
+    {n:'SOL SK하이닉스선물인버스2X',c:'A0193T0',p:11045,r:7.18},
+    {n:'SK하이닉스',c:'000660',p:1850000,r:-3.59},
+    {n:'삼성전자',c:'005930',p:259500,r:-3.88},
+    {n:'현대힘스',c:'A123456',p:16420,r:26.11},
+    {n:'SK이터닉스',c:'A234567',p:81600,r:1.24},
+    {n:'삼성전기',c:'009150',p:1397000,r:-3.52},
+    {n:'SK스퀘어',c:'A402340',p:1146000,r:-6.14},
+    {n:'LS ELECTRIC',c:'010120',p:214500,r:-4.02},
+    {n:'한화오션',c:'042660',p:91300,r:1.55},
+    {n:'NAVER',c:'035420',p:201000,r:-0.74},
+    {n:'카카오',c:'035720',p:42150,r:-1.63},
+    {n:'크래프톤',c:'259960',p:318000,r:2.40},
+    {n:'현대차',c:'005380',p:254500,r:0.59},
+    {n:'기아',c:'000270',p:98700,r:-0.81},
+    {n:'셀트리온',c:'068270',p:175300,r:1.12},
+  ].map(s=>({...s,cp:Math.round(s.p*s.r/100),vol:Math.round(Math.random()*5e6+5e5)}));
+
+  const won=n=>Number(n).toLocaleString()+'원';
+  const cls=v=>v>0?'up':(v<0?'down':'muted');
+  const rt=(cp,r)=>(cp>0?'+':'')+r+'%';
+  const sortBy=(a,m)=>{const x=[...a];if(m==='up')x.sort((p,q)=>q.r-p.r);else if(m==='down')x.sort((p,q)=>p.r-q.r);else x.sort((p,q)=>q.p*q.vol-p.p*p.vol);return x;};
+  const rowH=(s,rank)=>`<a class="row" href="#">${rank?`<div class="rank ${rank<=3?'top':''}">${rank}</div>`:''}<div class="logo">${s.n.charAt(0)}</div><div class="nm"><div class="t">${s.n}</div><div class="c">${s.c}</div></div><div class="pr"><div class="p">${won(s.p)}</div><div class="r ${cls(s.cp)}">${rt(s.cp,s.r)}</div></div></a>`;
+  let sort='value';
+  function render(){
+    document.getElementById('strip').innerHTML=sortBy(data,'value').slice(0,6).map(s=>`<a class="mcard" href="#"><div class="n">${s.n}</div><div class="p">${won(s.p)}</div><div class="r ${cls(s.cp)}">${rt(s.cp,s.r)}</div></a>`).join('');
+    document.getElementById('main').innerHTML=sortBy(data,sort).map((s,i)=>rowH(s,i+1)).join('');
+    document.getElementById('side').innerHTML=sortBy(data,'value').slice(0,12).map((s,i)=>rowH(s,i+1)).join('');
+    const d=new Date();document.getElementById('tm').textContent=`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')} 기준`;
+  }
+  document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('on'));b.classList.add('on');sort=b.dataset.s;render();});
+  render();
+</script>
