@@ -1,5 +1,6 @@
 <?php
 require_once 'func.php';
+/** @var mysqli $conn */   // config/db.php 에서 넘어옴 (에디터 자동완성·오탐 방지용)
 startAdminSession();
 
 if (!isAdminLoggedIn()) {
@@ -74,7 +75,7 @@ include 'includes/header.php';
             </td>
             <td class="small"><?= htmlspecialchars(substr($u['created_at'], 0, 10)) ?></td>
             <td>
-                <form method="POST" action="user_action.php" onsubmit="return confirm('<?= $suspended ? '활성화' : '정지' ?> 처리할까요?');">
+                <form method="POST" action="user_action.php" onsubmit="return confirm('<?= $suspended ? '활성화' : '정지' ?><?= csrfField() ?> 처리할까요?');">
                     <input type="hidden" name="action" value="status">
                     <input type="hidden" name="user_id" value="<?= (int) $u['id'] ?>">
                     <input type="hidden" name="status" value="<?= $suspended ? 'active' : 'suspended' ?>">
@@ -83,7 +84,7 @@ include 'includes/header.php';
             </td>
             <td>
                 <?php if (adminCan('adjust_cash')): ?>
-                <form method="POST" action="user_action.php" class="cash-form">
+                <form method="POST" action="user_action.php" class="cash-form"><?= csrfField() ?>
                     <input type="hidden" name="action" value="cash">
                     <input type="hidden" name="user_id" value="<?= (int) $u['id'] ?>">
                     <input type="number" name="delta" class="form-control form-control-sm amt" placeholder="+/- 금액" required>

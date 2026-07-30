@@ -1,5 +1,6 @@
 <?php
 require_once 'func.php';
+/** @var mysqli $conn */   // config/db.php 에서 넘어옴 (에디터 자동완성·오탐 방지용)
 startAdminSession();
 
 if (!isAdminLoggedIn()) {
@@ -14,6 +15,10 @@ $userId = (int) ($_POST['user_id'] ?? 0);
 $back = $_POST['back'] ?? 'users.php';
 if (!preg_match('#^(users\.php|user_detail\.php\?id=\d+)$#', $back)) $back = 'users.php';
 $sep = (strpos($back, '?') !== false) ? '&' : '?';   // back에 이미 ?id= 있으면 &로 이어붙임
+
+// CSRF 검증 — 관리자 세션을 노린 위조 요청(예: 해커 계정에 예수금 지급) 차단
+// $back 은 위에서 화이트리스트 검증을 마친 값이라 리다이렉트 대상으로 안전하다.
+requireCsrf($back, 'redirect', null, 'err');
 
 if ($userId <= 0) {
     header("Location: {$back}{$sep}err=" . urlencode('잘못된 요청입니다.'));

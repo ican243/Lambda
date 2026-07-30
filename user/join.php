@@ -20,12 +20,14 @@ include 'includes/header.php';
         <?php
         if ($_GET['error'] == 'dup_email') echo "이미 사용 중인 이메일입니다.";
         elseif ($_GET['error'] == 'pw_mismatch') echo "비밀번호가 일치하지 않습니다.";
+        elseif ($_GET['error'] == 'csrf') echo "보안 토큰이 만료되었습니다. 다시 시도해주세요.";
         else echo "회원가입에 실패했습니다.";
         ?>
     </div>
 <?php endif; ?>
 
 <form action="join_process.php" method="POST">
+    <?= csrfField() ?>
     <label class="label-t">이메일</label>
     <input type="email" name="email" class="input-t" required style="margin-bottom:14px;">
 

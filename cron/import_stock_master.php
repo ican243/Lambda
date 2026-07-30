@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../config/db.php';
+/** @var mysqli $conn */   // config/db.php 에서 넘어옴 (에디터 자동완성·오탐 방지용)
 
 // -----------------------------
 // 1. 마스터 파일 다운로드 + 압축 해제

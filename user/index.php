@@ -1,5 +1,6 @@
 <?php
 require_once 'func.php';
+/** @var mysqli $conn */   // config/db.php 에서 넘어옴 (에디터 자동완성·오탐 방지용)
 startUserSession();
 
 // 로그인 안 해도 볼 수 있는 공개 홈. (매수/매도/관심등록만 로그인 요구)

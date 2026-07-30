@@ -1,5 +1,6 @@
 <?php
 require_once 'func.php';
+/** @var mysqli $conn */   // config/db.php 에서 넘어옴 (에디터 자동완성·오탐 방지용)
 startUserSession();
 
 // 비로그인도 종목/차트/호가/체결을 볼 수 있는 공개 페이지. (거래·관심등록만 로그인 요구)
@@ -111,7 +112,7 @@ include 'includes/header.php';
 
     <!-- 주문 패널 -->
     <div class="grid-stack-item" gs-id="order" gs-w="4" gs-h="7" gs-min-w="3" gs-min-h="4">
-        <div class="grid-stack-item-content widget" data-w="order">
+        <div class="grid-stack-item-content widget" data-w="order" id="order">
             <div class="widget-h"><span class="wt">주문하기</span><span class="drag-handle" title="끌어서 이동"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="4" r="1.4"/><circle cx="11" cy="4" r="1.4"/><circle cx="5" cy="8" r="1.4"/><circle cx="11" cy="8" r="1.4"/><circle cx="5" cy="12" r="1.4"/><circle cx="11" cy="12" r="1.4"/></svg></span></div>
             <?php if ($loggedIn): ?>
                 <div class="op-cash">
@@ -119,6 +120,7 @@ include 'includes/header.php';
                     <span class="v"><?= number_format($account['cash_balance']) ?>원</span>
                 </div>
                 <form id="trade-form-detail" action="trade_process.php" method="POST">
+                    <?= csrfField() ?>
                     <input type="hidden" name="stock_code" value="<?= htmlspecialchars($stockCode) ?>">
                     <input type="hidden" name="order_type" id="order-type-field">
                     <label class="label-t">수량</label>
@@ -193,6 +195,7 @@ include 'includes/header.php';
 <script>
     const stockCode = '<?= $stockCode ?>';
     const loggedIn = <?= $loggedIn ? 'true' : 'false' ?>;
+    const CSRF = <?= json_encode(csrfToken()) ?>;   // AJAX POST에 함께 보낼 CSRF 토큰
     let currentPrice = <?= (int) ($stock['price'] ?? 0) ?>;
     let prevClose = <?= (int) (($stock['price'] ?? 0) - ($stock['change_price'] ?? 0)) ?>;
     let quote = null;
@@ -352,6 +355,19 @@ include 'includes/header.php';
     grid.on('change', saveLayout);
     grid.on('resizestop', () => { saveLayout(); resizeChart(); });
 
+    // #order 로 들어온 경우(자동매매 화면의 '일반매매' 버튼) 주문 패널로 스크롤 + 잠깐 강조.
+    // gridstack이 위젯을 absolute 로 재배치하므로 브라우저 기본 해시 점프는 엉뚱한 곳으로 간다
+    // → 배치가 끝난 뒤 직접 스크롤한다.
+    if (location.hash === '#order') {
+        requestAnimationFrame(() => {
+            const panel = document.getElementById('order');
+            if (!panel) return;
+            panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            panel.classList.add('w-highlight');
+            setTimeout(() => panel.classList.remove('w-highlight'), 1600);
+        });
+    }
+
     function resetLayout() {          // 기본 배치로 초기화
         localStorage.removeItem(LAYOUT_KEY);
         location.reload();
@@ -398,7 +414,11 @@ include 'includes/header.php';
         if (!loggedIn) { location.href = 'login.php'; return; }
         const isFav = this.dataset.fav === '1';
         const url = isFav ? 'watchlist_remove.php' : 'watchlist_add.php';
-        await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'stock_code=' + encodeURIComponent(stockCode) });
+        await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': CSRF },
+            body: 'stock_code=' + encodeURIComponent(stockCode) + '&csrf_token=' + encodeURIComponent(CSRF)
+        });
         this.dataset.fav = isFav ? '0' : '1';
         this.textContent = isFav ? '♡ 관심등록' : '♥ 관심종목';
         this.className = 'btn-t ' + (isFav ? 'btn-primary-t' : 'btn-ghost-t');
@@ -508,10 +528,13 @@ include 'includes/header.php';
         const content = ta.value.trim();
         if (!content) return;
         const r = await fetch('post_add.php', {
-            method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: 'stock_code=' + encodeURIComponent(stockCode) + '&content=' + encodeURIComponent(content),
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': CSRF },
+            body: 'stock_code=' + encodeURIComponent(stockCode) + '&content=' + encodeURIComponent(content)
+                + '&csrf_token=' + encodeURIComponent(CSRF),
         }).then(r => r.json());
         if (r.error === 'login') { location.href = 'login.php'; return; }
+        if (r.error === 'csrf') { alert('보안 토큰이 만료되었습니다. 새로고침 후 다시 시도해주세요.'); return; }
         ta.value = '';
         loadPosts();
     }

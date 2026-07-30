@@ -1,5 +1,6 @@
 <?php
 require_once 'func.php';
+/** @var mysqli $conn */   // config/db.php 에서 넘어옴 (에디터 자동완성·오탐 방지용)
 startAdminSession();
 
 if (!isAdminLoggedIn()) {
@@ -64,7 +65,7 @@ include 'includes/header.php';
 <div class="card p-3 mt-3">
     <div class="row g-3 align-items-center">
         <div class="col-auto">
-            <form method="POST" action="user_action.php" onsubmit="return confirm('<?= $suspended ? '활성화' : '정지' ?> 처리할까요?');">
+            <form method="POST" action="user_action.php" onsubmit="return confirm('<?= $suspended ? '활성화' : '정지' ?><?= csrfField() ?> 처리할까요?');">
                 <input type="hidden" name="action" value="status">
                 <input type="hidden" name="user_id" value="<?= (int) $u['id'] ?>">
                 <input type="hidden" name="status" value="<?= $suspended ? 'active' : 'suspended' ?>">
@@ -74,7 +75,7 @@ include 'includes/header.php';
         </div>
         <div class="col">
             <?php if (adminCan('adjust_cash')): ?>
-            <form method="POST" action="user_action.php" class="d-flex gap-2" style="max-width:460px;">
+            <form method="POST" action="user_action.php" class="d-flex gap-2" style="max-width:460px;"><?= csrfField() ?>
                 <input type="hidden" name="action" value="cash">
                 <input type="hidden" name="user_id" value="<?= (int) $u['id'] ?>">
                 <input type="hidden" name="back" value="<?= htmlspecialchars($back) ?>">

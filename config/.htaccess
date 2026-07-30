@@ -1,0 +1,22 @@
+# config/.htaccess
+# -----------------------------------------------------------
+# 이 폴더는 웹으로 직접 열려선 안 된다.
+#   - kis_config.php   : KIS API 앱키/시크릿/계좌번호
+#   - token_cache.json : KIS 액세스 토큰 (그대로 노출되면 남이 우리 키로 API 사용)
+#   - db.php           : DB 접속 정보
+# PHP 파일은 require_once 로 '서버 내부에서' 불러오는 것이므로
+# 웹 직접 접근을 막아도 애플리케이션 동작에는 전혀 지장이 없다.
+#
+# ※ .gitignore 는 Git 에만 적용된다. 웹 접근 차단은 이 파일이 담당.
+# -----------------------------------------------------------
+
+# Apache 2.4
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+
+# Apache 2.2 이하 호환
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>

@@ -1,5 +1,6 @@
 <?php
 require_once 'func.php';
+/** @var mysqli $conn */   // config/db.php 에서 넘어옴 (에디터 자동완성·오탐 방지용)
 startAdminSession();
 
 if (!isAdminLoggedIn()) {
@@ -8,11 +9,12 @@ if (!isAdminLoggedIn()) {
 }
 ensureAdminSchema($conn);
 
-$msg = '';
-$err = '';
+$msg = $_GET['msg'] ?? '';
+$err = $_GET['err'] ?? '';
 
 // ── POST 처리 ── (RBAC: 설정/지급/점검/공지는 모두 최고관리자 전용)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    requireCsrf('settings.php', 'redirect', null, 'err');   // CSRF 검증
     requireAdminCan('settings', 'settings.php');   // 서버측 강제
     $act = $_POST['action'] ?? '';
     try {
@@ -96,7 +98,7 @@ include 'includes/header.php';
             <h5>신규 가입 초기 예수금</h5>
             <p class="text-muted small">새로 가입하는 회원에게 지급되는 가상 예수금 기본값입니다.</p>
             <div class="mb-2">현재 설정: <b class="num"><?= number_format($initialCash) ?>원</b></div>
-            <form method="POST" class="row g-2 align-items-center">
+            <form method="POST" class="row g-2 align-items-center"><?= csrfField() ?>
                 <input type="hidden" name="action" value="set_initial">
                 <div class="col-auto">
                     <div class="input-group">
@@ -115,7 +117,7 @@ include 'includes/header.php';
         <div class="card p-4 h-100">
             <h5>예수금 일괄 지급 (이벤트)</h5>
             <p class="text-muted small">현재 전체 회원 <b><?= number_format($userCount) ?>명</b>의 예수금에 지정 금액을 더해줍니다.</p>
-            <form method="POST" onsubmit="return confirm('전체 회원에게 지급할까요? 되돌릴 수 없습니다.');">
+            <form method="POST" onsubmit="return confirm('전체 회원에게 지급할까요? 되돌릴 수 없습니다.');"><?= csrfField() ?>
                 <input type="hidden" name="action" value="grant_all">
                 <div class="input-group mb-2">
                     <input type="number" name="amount" class="form-control num" placeholder="지급 금액" min="1" step="100000" required>
@@ -135,7 +137,7 @@ include 'includes/header.php';
     <div class="mb-3">현재 상태:
         <?php if ($maintOn): ?><span class="badge bg-danger">점검 중</span><?php else: ?><span class="badge bg-success">정상 운영</span><?php endif; ?>
     </div>
-    <form method="POST" class="row g-2 align-items-end">
+    <form method="POST" class="row g-2 align-items-end"><?= csrfField() ?>
         <input type="hidden" name="action" value="toggle_maint">
         <input type="hidden" name="mode" value="<?= $maintOn ? '0' : '1' ?>">
         <div class="col-md-8">
@@ -152,7 +154,7 @@ include 'includes/header.php';
 <div class="card p-4 mt-3">
     <h5>공지사항 관리</h5>
     <p class="text-muted small">활성 공지는 유저 페이지 상단에 배너로 표시됩니다.</p>
-    <form method="POST" class="row g-2 mb-3">
+    <form method="POST" class="row g-2 mb-3"><?= csrfField() ?>
         <input type="hidden" name="action" value="notice_create">
         <div class="col-md-4"><input type="text" name="title" class="form-control" placeholder="공지 제목" required></div>
         <div class="col-md-6"><input type="text" name="body" class="form-control" placeholder="내용 (선택)"></div>
@@ -168,7 +170,7 @@ include 'includes/header.php';
                 <td><b><?= htmlspecialchars($n['title']) ?></b></td>
                 <td class="small text-muted"><?= htmlspecialchars($n['body']) ?></td>
                 <td class="text-center">
-                    <form method="POST" class="d-inline">
+                    <form method="POST" class="d-inline"><?= csrfField() ?>
                         <input type="hidden" name="action" value="notice_toggle">
                         <input type="hidden" name="id" value="<?= (int) $n['id'] ?>">
                         <input type="hidden" name="active" value="<?= $n['is_active'] ? '0' : '1' ?>">
@@ -176,7 +178,7 @@ include 'includes/header.php';
                     </form>
                 </td>
                 <td class="text-end">
-                    <form method="POST" class="d-inline" onsubmit="return confirm('삭제할까요?');">
+                    <form method="POST" class="d-inline" onsubmit="return confirm('삭제할까요?');"><?= csrfField() ?>
                         <input type="hidden" name="action" value="notice_delete">
                         <input type="hidden" name="id" value="<?= (int) $n['id'] ?>">
                         <button class="btn btn-sm btn-outline-danger">삭제</button>

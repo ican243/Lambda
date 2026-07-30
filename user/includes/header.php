@@ -1,4 +1,5 @@
 <?php
+/** @var mysqli $conn */   // config/db.php 에서 넘어옴 (에디터 자동완성·오탐 방지용)
 // 각 페이지에서 include 전에 $pageWide = true 로 설정하면 넓은(대시보드) 레이아웃,
 // 아니면 좁은(폼/상세) 레이아웃을 쓴다.
 // $pageClass 를 직접 지정하면(예: 'app-xwide') 그 클래스를 그대로 쓴다.
@@ -28,6 +29,8 @@ $cssVer = @filemtime(__DIR__ . '/../assets/toss.css') ?: '1';
             <div class="nav-menu">
                 <a href="index.php" class="nav-link">홈</a>
                 <a href="index.php#ranking" class="nav-link">주식 골라보기</a>
+                <!-- 자동매매: 비로그인에게도 보이고, 클릭하면 auto_trade.php가 로그인 여부를 판단 -->
+                <a href="auto_trade.php" class="nav-link nav-link-accent">자동매매</a>
                 <?php if ($loggedIn): ?>
                     <a href="trade.php" class="nav-link">내 계좌</a>
                 <?php endif; ?>

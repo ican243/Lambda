@@ -1,9 +1,11 @@
 <?php
 require_once 'func.php';
+/** @var mysqli $conn */   // config/db.php 에서 넘어옴 (에디터 자동완성·오탐 방지용)
 startAdminSession();
+requireCsrf('login.php', 'redirect', 'csrf');
 
-$adminId = trim($_POST['admin_id']);
-$password = $_POST['password'];
+$adminId = trim($_POST['admin_id'] ?? '');
+$password = $_POST['password'] ?? '';
 
 $admin = getAdminByAdminId($conn, $adminId);
 

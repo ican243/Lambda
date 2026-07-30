@@ -7,6 +7,7 @@
 // 실행: php.exe cron/update_rankings.php  (장중 주기 실행 권장)
 // -----------------------------------------------------------
 require_once __DIR__ . '/../config/kis_api.php';
+/** @var mysqli $conn */   // config/db.php 에서 넘어옴 (에디터 자동완성·오탐 방지용)
 
 echo date('Y-m-d H:i:s') . " - 거래대금 순위 수집 시작\n";
 

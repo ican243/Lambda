@@ -1,12 +1,14 @@
 <?php
 require_once 'func.php';
+/** @var mysqli $conn */   // config/db.php 에서 넘어옴 (에디터 자동완성·오탐 방지용)
 startUserSession();
+requireCsrf('join.php', 'redirect', 'csrf');
 
 // 1. 값 받아오기
-$email = trim($_POST['email']);
-$password = $_POST['password'];
-$passwordConfirm = $_POST['password_confirm'];
-$nickname = trim($_POST['nickname']);
+$email = trim($_POST['email'] ?? '');
+$password = $_POST['password'] ?? '';
+$passwordConfirm = $_POST['password_confirm'] ?? '';
+$nickname = trim($_POST['nickname'] ?? '');
 
 // 2. 비밀번호 확인 일치 체크
 if ($password !== $passwordConfirm) {

@@ -22,6 +22,34 @@ function isLoggedIn()
 }
 
 // -----------------------------
+// 2-1. 로그인이 필요한 페이지 게이트(서버측 강제)
+//   비로그인이면 로그인 화면으로 보내고, 로그인 끝나면 원래 가려던 곳으로 되돌려준다.
+// -----------------------------
+function requireUserLogin($next = null)
+{
+    if (isLoggedIn()) return;
+    // 기본값 = 지금 열려던 페이지 파일명 + 쿼리스트링
+    if ($next === null) {
+        $next = basename($_SERVER['SCRIPT_NAME'] ?? '');
+        if (!empty($_SERVER['QUERY_STRING'])) $next .= '?' . $_SERVER['QUERY_STRING'];
+    }
+    header('Location: login.php?next=' . urlencode($next));
+    exit;
+}
+
+// -----------------------------
+// 2-2. 로그인 후 돌아갈 주소 검증 (오픈 리다이렉트 방지)
+//   같은 폴더의 .php 파일명만 허용 → //evil.com, http://... 같은 외부주소는 전부 차단
+// -----------------------------
+function safeNext($next, $fallback = 'index.php')
+{
+    $next = trim((string) $next);
+    if ($next === '') return $fallback;
+    if (!preg_match('/^[A-Za-z0-9_]+\.php(\?[A-Za-z0-9_=&%.\-]*)?$/', $next)) return $fallback;
+    return $next;
+}
+
+// -----------------------------
 // 3. 이메일 중복 체크
 // -----------------------------
 function emailExists($conn, $email)
@@ -272,6 +300,11 @@ function createAccount($conn, $userId)
 // -----------------------------
 function processBuy($conn, $userId, $stockCode, $quantity, $price)
 {
+    // 방어적 검증(2차) — 호출부에서 걸러도 데이터 계층에서 한 번 더 막는다
+    $quantity = (int) $quantity;
+    if ($quantity < 1) throw new Exception("수량은 1주 이상이어야 합니다.");
+    if ($price <= 0)   throw new Exception("잘못된 가격입니다.");
+
     $totalAmount = $quantity * $price;
 
     mysqli_begin_transaction($conn);
@@ -331,6 +364,11 @@ function processBuy($conn, $userId, $stockCode, $quantity, $price)
 // -----------------------------
 function processSell($conn, $userId, $stockCode, $quantity, $price)
 {
+    // 방어적 검증(2차) — 음수 매도는 보유수량을 늘리고 현금을 깎는 역버그가 된다
+    $quantity = (int) $quantity;
+    if ($quantity < 1) throw new Exception("수량은 1주 이상이어야 합니다.");
+    if ($price <= 0)   throw new Exception("잘못된 가격입니다.");
+
     $totalAmount = $quantity * $price;
 
     mysqli_begin_transaction($conn);
@@ -564,5 +602,187 @@ function addStockPost($conn, $stockCode, $userId, $nickname, $content)
         VALUES (?, ?, ?, ?)
     ");
     mysqli_stmt_bind_param($stmt, "siss", $stockCode, $userId, $nickname, $content);
+    return mysqli_stmt_execute($stmt);
+}
+
+// =====================================================================
+// [자동매매]
+//   지금은 "화면만" — 실제 매매 로직은 다음 단계.
+//   대신 나중에 로직이 붙을 때 프론트를 다시 안 만들도록,
+//   ①자동/수동 주문 구분 컬럼 ②일시정지 상태를 미리 DB에 만들어 둔다.
+// =====================================================================
+
+// 스키마 자동 보강 (형이 SQL 직접 안 돌려도 됨)
+//   orders.is_auto      : 0=사람이 낸 주문, 1=자동매매가 낸 주문
+//   auto_trade_settings : 유저별 자동매매 일시정지 상태
+// ⚠ MySQL 8.4에는 'ADD COLUMN IF NOT EXISTS' 문법이 없어서(그건 MariaDB 전용)
+//   information_schema 로 먼저 있는지 확인한 뒤 ALTER 한다.
+function ensureAutoTradeSchema($conn)
+{
+    static $done = false;
+    if ($done) return;                 // 한 요청에서 여러 번 호출돼도 확인은 한 번만
+    $done = true;
+
+    $res = @mysqli_query($conn, "
+        SELECT COUNT(*) AS c FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'orders' AND COLUMN_NAME = 'is_auto'
+    ");
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+    if ($row && (int) $row['c'] === 0) {
+        @mysqli_query($conn, "ALTER TABLE orders
+            ADD COLUMN is_auto TINYINT NOT NULL DEFAULT 0,
+            ADD INDEX idx_user_auto (user_id, is_auto, created_at)");
+    }
+
+    @mysqli_query($conn, "CREATE TABLE IF NOT EXISTS auto_trade_settings (
+        user_id INT PRIMARY KEY,
+        is_paused TINYINT NOT NULL DEFAULT 0,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        CONSTRAINT fk_ats_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+}
+
+// -----------------------------
+// 보유종목 상위 N개 (도넛차트 + 우측 리스트용)
+//   조각 크기 기준 = 평가금액(현재가 × 수량). 매입금액이 아님.
+//   6위 이하는 아예 표시하지 않는다('기타'로 묶지 않음).
+// -----------------------------
+function getAutoPortfolio($conn, $userId, $limit = 5)
+{
+    $items = [];
+    $totalEval = 0.0;
+
+    foreach (getMyHoldings($conn, $userId) as $r) {
+        $qty = (int) $r['quantity'];
+        if ($qty <= 0) continue;
+
+        $avg = (float) $r['avg_price'];
+        $cur = (float) ($r['current_price'] ?? 0);
+        if ($cur <= 0) $cur = $avg;          // 시세 미수집 종목은 평단으로 대체(0원 조각 방지)
+
+        $eval = $cur * $qty;
+        $totalEval += $eval;
+
+        $items[] = [
+            'stock_code'   => $r['stock_code'],
+            'stock_name'   => $r['stock_name'],
+            'quantity'     => $qty,
+            'avg_price'    => $avg,
+            'price'        => $cur,
+            'eval_amount'  => $eval,
+            'profit_amount' => ($cur - $avg) * $qty,
+            'profit_rate'  => $avg > 0 ? round(($cur - $avg) / $avg * 100, 2) : 0,
+        ];
+    }
+
+    usort($items, function ($a, $b) { return $b['eval_amount'] <=> $a['eval_amount']; });
+    $top = array_slice($items, 0, max(1, (int) $limit));
+
+    // 비중은 '전체 보유 평가금액 대비'(진짜 포트폴리오 비중).
+    // 도넛은 상위 N개만 그리므로, 상위 합계가 100%가 아닐 수 있다 → 화면에 따로 안내.
+    $shownEval = 0.0;
+    foreach ($top as &$t) {
+        $t['weight'] = $totalEval > 0 ? round($t['eval_amount'] / $totalEval * 100, 1) : 0;
+        $shownEval += $t['eval_amount'];
+    }
+    unset($t);
+
+    return [
+        'items'       => $top,
+        'total_eval'  => $totalEval,
+        'total_count' => count($items),      // 전체 보유 종목 수 (5개 초과 안내용)
+        'shown_eval'  => $shownEval,
+        'shown_ratio' => $totalEval > 0 ? round($shownEval / $totalEval * 100, 1) : 0,
+    ];
+}
+
+// -----------------------------
+// 거래내역 (최신 N건) + 수익률
+//   · 매도 행 = 실현수익률 (매도가 - 그 시점 평단) / 평단
+//   · 매수 행 = "매수가 대비 현재가" 등락률 (매수 시점엔 손익이 확정되지 않으므로)
+//
+//   그 시점 평단은 DB에 저장돼 있지 않다(holdings.avg_price는 '지금' 값이고,
+//   전량 매도하면 행이 사라짐). 그래서 주문을 시간순으로 재생(replay)해서
+//   processBuy 와 같은 이동평균 방식으로 매 시점 평단을 복원한다.
+// -----------------------------
+function getAutoTradeHistory($conn, $userId, $limit = 15, $autoOnly = false)
+{
+    ensureAutoTradeSchema($conn);
+
+    $where = $autoOnly ? "AND o.is_auto = 1" : "";
+    $stmt = mysqli_prepare($conn, "
+        SELECT o.id, o.stock_code, sm.stock_name, o.order_type, o.quantity, o.price,
+               o.total_amount, o.created_at, o.is_auto, sl.price AS current_price
+        FROM orders o
+        INNER JOIN stock_master sm ON sm.stock_code = o.stock_code
+        LEFT JOIN stock_latest sl ON sl.stock_code = o.stock_code
+        WHERE o.user_id = ? $where
+        ORDER BY o.created_at ASC, o.id ASC
+    ");
+    if (!$stmt) return [];
+    mysqli_stmt_bind_param($stmt, "i", $userId);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+
+    $rows = [];
+    while ($row = mysqli_fetch_assoc($result)) $rows[] = $row;
+
+    $book = [];   // stock_code => ['qty' => 보유수량, 'cost' => 매입원가 합계]
+    foreach ($rows as &$r) {
+        $code = $r['stock_code'];
+        $qty  = (int) $r['quantity'];
+        $px   = (float) $r['price'];
+        $cur  = (float) ($r['current_price'] ?? 0);
+        if (!isset($book[$code])) $book[$code] = ['qty' => 0, 'cost' => 0.0];
+
+        if ($r['order_type'] === 'buy') {
+            $book[$code]['qty']  += $qty;
+            $book[$code]['cost'] += $px * $qty;
+            $r['rate']       = ($px > 0 && $cur > 0) ? round(($cur - $px) / $px * 100, 2) : null;
+            $r['rate_basis'] = 'current';       // 매수가 대비 현재가
+        } else {
+            $avg = $book[$code]['qty'] > 0 ? $book[$code]['cost'] / $book[$code]['qty'] : 0.0;
+            $r['rate']       = $avg > 0 ? round(($px - $avg) / $avg * 100, 2) : null;
+            $r['rate_basis'] = 'realized';      // 실현수익률
+
+            $sellQty = min($qty, $book[$code]['qty']);
+            $book[$code]['qty']  -= $sellQty;
+            $book[$code]['cost'] -= $avg * $sellQty;
+            if ($book[$code]['qty'] <= 0) $book[$code] = ['qty' => 0, 'cost' => 0.0];
+        }
+
+        $r['id']       = (int) $r['id'];
+        $r['is_auto']  = (int) ($r['is_auto'] ?? 0);
+        $r['quantity'] = $qty;
+        $r['price']    = $px;
+    }
+    unset($r);
+
+    $rows = array_reverse($rows);                       // 최신이 맨 위
+    return array_slice($rows, 0, max(1, (int) $limit)); // 최신 N건만
+}
+
+// -----------------------------
+// 자동매매 일시정지 상태 (나중에 매매 로직이 이 값을 읽고 멈춘다)
+// -----------------------------
+function isAutoTradePaused($conn, $userId)
+{
+    ensureAutoTradeSchema($conn);
+    $stmt = @mysqli_prepare($conn, "SELECT is_paused FROM auto_trade_settings WHERE user_id = ?");
+    if (!$stmt) return false;
+    mysqli_stmt_bind_param($stmt, "i", $userId);
+    mysqli_stmt_execute($stmt);
+    $row = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
+    return $row ? ((int) $row['is_paused'] === 1) : false;
+}
+
+function setAutoTradePaused($conn, $userId, $paused)
+{
+    ensureAutoTradeSchema($conn);
+    $flag = $paused ? 1 : 0;
+    $stmt = mysqli_prepare($conn, "INSERT INTO auto_trade_settings (user_id, is_paused) VALUES (?, ?)
+        ON DUPLICATE KEY UPDATE is_paused = VALUES(is_paused)");
+    if (!$stmt) return false;
+    mysqli_stmt_bind_param($stmt, "ii", $userId, $flag);
     return mysqli_stmt_execute($stmt);
 }

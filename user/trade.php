@@ -1,5 +1,6 @@
 <?php
 require_once 'func.php';
+/** @var mysqli $conn */   // config/db.php 에서 넘어옴 (에디터 자동완성·오탐 방지용)
 startUserSession();
 
 if (!isLoggedIn()) {
@@ -50,6 +51,7 @@ include 'includes/header.php';
 <div class="section-title">빠른 주문</div>
 <div class="card-t">
     <form action="trade_process.php" method="POST" id="trade-form">
+        <?= csrfField() ?>
         <!-- 종목명으로 검색 → 선택하면 코드가 자동으로 채워짐 (초보자 친화) -->
         <div class="ac-wrap" style="margin-bottom:10px;">
             <input type="text" id="q-search" class="input-t" autocomplete="off"

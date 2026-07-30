@@ -6,6 +6,7 @@
 // (MariaDB의 IF NOT EXISTS 로 여러 번 실행해도 안전)
 // -----------------------------------------------------------
 require_once __DIR__ . '/../config/db.php';
+/** @var mysqli $conn */   // config/db.php 에서 넘어옴 (에디터 자동완성·오탐 방지용)
 
 $statements = [
     "ALTER TABLE stock_latest ADD COLUMN IF NOT EXISTS trade_value BIGINT DEFAULT 0",

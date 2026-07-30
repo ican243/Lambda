@@ -1,5 +1,6 @@
 <?php
 require_once 'func.php';
+/** @var mysqli $conn */   // config/db.php 에서 넘어옴 (에디터 자동완성·오탐 방지용)
 startAdminSession();
 
 if (!isAdminLoggedIn()) {
@@ -18,6 +19,7 @@ function countSupers($conn) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    requireCsrf('admins.php', 'redirect', null, 'err');   // CSRF 검증
     requireAdminCan('manage_admins', 'admins.php');   // 서버측 강제 (super 전용)
     $act = $_POST['action'] ?? '';
     $myId = (int) ($_SESSION['admin_id'] ?? 0);
@@ -96,14 +98,14 @@ include 'includes/header.php';
             <td><?= htmlspecialchars($a['name']) ?></td>
             <td><span class="badge bg-<?= $isSuper ? 'dark' : 'secondary' ?>"><?= roleLabel($a['role']) ?></span></td>
             <td class="text-end">
-                <form method="POST" class="d-inline">
+                <form method="POST" class="d-inline"><?= csrfField() ?>
                     <input type="hidden" name="action" value="role">
                     <input type="hidden" name="id" value="<?= (int) $a['id'] ?>">
                     <input type="hidden" name="role" value="<?= $isSuper ? 'staff' : 'super' ?>">
                     <button class="btn btn-sm btn-outline-dark"><?= $isSuper ? 'CS로 강등' : '최고관리자로' ?></button>
                 </form>
                 <?php if (!$isMe): ?>
-                <form method="POST" class="d-inline" onsubmit="return confirm('삭제할까요?');">
+                <form method="POST" class="d-inline" onsubmit="return confirm('삭제할까요?');"><?= csrfField() ?>
                     <input type="hidden" name="action" value="delete">
                     <input type="hidden" name="id" value="<?= (int) $a['id'] ?>">
                     <button class="btn btn-sm btn-outline-danger">삭제</button>
@@ -117,7 +119,7 @@ include 'includes/header.php';
 
 <div class="card p-4 mt-3" style="max-width:640px;">
     <h5>관리자 추가</h5>
-    <form method="POST" class="row g-2">
+    <form method="POST" class="row g-2"><?= csrfField() ?>
         <input type="hidden" name="action" value="add">
         <div class="col-md-6"><input type="text" name="admin_id" class="form-control" placeholder="로그인 아이디" required></div>
         <div class="col-md-6"><input type="text" name="name" class="form-control" placeholder="이름" required></div>
