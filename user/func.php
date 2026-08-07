@@ -519,39 +519,239 @@ function getSingleStockPrice($conn, $stockCode)
     return mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
 }
 
+// =============================================================
+// [차트] 기간별 캔들 데이터
+// =============================================================
+// 예전 코드는 `WHERE DATE(created_at) = CURDATE()` 로 '오늘'만 조회했다.
+// 그래서 매일 아침 9시가 되면 차트가 처음부터 다시 그려졌다(형이 본 증상).
+// 이제 기간(range)을 받고, 그 기간에 어울리는 '해상도'까지 함께 고른다.
+//
+//   range  기간          해상도   캔들 개수(대략)   읽는 테이블
+//   -----  ------------  -------  ---------------  ------------------
+//   1D     오늘          1분봉    ~390             stock_candles_1m
+//   1W     최근 7일      5분봉    ~390             stock_candles_1m
+//   1M     최근 30일     30분봉   ~260             stock_candles_1m
+//   3M     최근 3개월    일봉     ~65              stock_candles_1d
+//   1Y     최근 1년      일봉     ~250             stock_candles_1d
+//   5Y     최근 5년      일봉     ~1,230           stock_candles_1d
+//
+// 🔑 왜 해상도를 나누나 (이 설계가 이 기능의 핵심):
+//    1분봉을 1년치 그대로 보내면 캔들이 9만 개, JSON이 수 MB가 되어 브라우저가 렉 걸린다.
+//    기간이 길어질수록 봉을 굵게 만들면 어느 탭을 눌러도 캔들 수가 항상 수백 개로 유지된다.
+//    즉 '1년 보기'가 '오늘 보기'보다 무거워지지 않는다.
 // -----------------------------
-// 1분봉 캔들 데이터 생성 (오늘자 원시 데이터를 1분 단위로 묶음)
-// -----------------------------
-function getCandleData($conn, $stockCode)
-{
-    $stmt = mysqli_prepare($conn, "
-        SELECT created_at, price
-        FROM stock_logs
-        WHERE stock_code = ? AND DATE(created_at) = CURDATE()
-        ORDER BY created_at ASC
-    ");
-    mysqli_stmt_bind_param($stmt, "s", $stockCode);
-    mysqli_stmt_execute($stmt);
-    $result = mysqli_stmt_get_result($stmt);
 
-    $buckets = [];
-    while ($row = mysqli_fetch_assoc($result)) {
-        $minuteKey = substr($row['created_at'], 0, 16);
-        $buckets[$minuteKey][] = (float) $row['price'];
+// 기간 코드 → 해상도/조회범위 규격표. 모르는 값이 들어오면 1D로 떨어뜨린다.
+function chartRangeSpec($range)
+{
+    $map = [
+        '1D' => ['src' => 'minute', 'bucket' => 60,      'days' => 1],
+        '1W' => ['src' => 'minute', 'bucket' => 300,     'days' => 7],
+        // ⚠️ 1M은 원래 30분봉(minute)이었으나 2026-08-07에 일봉으로 바꿨다.
+        //    이유: 분봉의 원천인 stock_logs/stock_candles_1m 은 수집을 시작한 2026-07-20 부터만
+        //    존재해서, '1개월'을 눌러도 실제로는 18일치밖에 안 그려졌다(형이 발견한 증상).
+        //    일봉 테이블은 2024년부터 있으므로 일봉으로 읽어야 한 달이 진짜 한 달로 나온다.
+        //    분 단위 디테일이 필요한 구간은 1D·1W가 담당한다.
+        '1M' => ['src' => 'daily',  'bucket' => 86400,   'days' => 31],
+        '3M' => ['src' => 'daily',  'bucket' => 86400,   'days' => 92],
+        '1Y' => ['src' => 'daily',  'bucket' => 86400,   'days' => 366],
+        '2Y' => ['src' => 'daily',  'bucket' => 86400,   'days' => 732],
+        // 5Y는 버튼에서 뺐다(백필이 2년치라 5년을 눌러도 2년만 나와 형이 혼란스러웠음).
+        // 옛 링크·북마크가 죽지 않도록 규격표에는 남겨둔다. 나중에 5년치를 백필하면 버튼만 되살리면 된다.
+        '5Y' => ['src' => 'daily',  'bucket' => 86400,   'days' => 1830],
+    ];
+    $key = strtoupper(trim((string) $range));
+    return $map[$key] ?? $map['1D'];
+}
+
+// 일봉 테이블은 3단계에서 새로 쓰는 것이라, 없으면 자동 생성한다(형이 SQL 안 돌려도 되게).
+// ⚠️ 컬레이션은 stock_candles_1m·stock_master 와 같은 utf8mb3_unicode_ci 로 맞춘다.
+//    DB에 컬레이션이 3종 섞여 있어서, 안 맞추면 stock_master JOIN이 "illegal mix of collations"로 깨진다.
+function ensureCandle1dTable($conn)
+{
+    static $done = false;              // 요청당 한 번만 (차트 호출마다 CREATE 쿼리 날리지 않도록)
+    if ($done) return;
+    mysqli_query($conn, "
+        CREATE TABLE IF NOT EXISTS stock_candles_1d (
+            stock_code  VARCHAR(10) NOT NULL,
+            d           DATE        NOT NULL COMMENT '거래일',
+            open_p      INT NOT NULL,
+            high_p      INT NOT NULL,
+            low_p       INT NOT NULL,
+            close_p     INT NOT NULL,
+            volume      BIGINT DEFAULT 0 COMMENT '그날 거래량',
+            trade_value BIGINT DEFAULT 0 COMMENT '그날 거래대금(원)',
+            PRIMARY KEY (stock_code, d),
+            KEY idx_d (d)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_unicode_ci
+    ");
+    $done = true;
+}
+
+// 'YYYY-MM-DD HH:MM:SS' → 유닉스 초.
+// ⚠️ 반드시 ' UTC'를 붙인다. 우리 DB 시각은 전부 KST '벽시계 값'이고,
+//    lightweight-charts는 타임스탬프를 UTC로 해석해 라벨을 찍는다.
+//    UTC로 읽어야 화면에 09:00이 09:00으로 나온다. (PHP 기본 타임존에 좌우되지 않게 고정)
+function chartTs($datetimeStr)
+{
+    return strtotime(substr($datetimeStr, 0, 19) . ' UTC');
+}
+
+function getCandleData($conn, $stockCode, $range = '1D')
+{
+    $spec = chartRangeSpec($range);
+    return $spec['src'] === 'daily'
+        ? getDailyCandles($conn, $stockCode, $spec['days'])
+        : getMinuteCandles($conn, $stockCode, $spec['days'], $spec['bucket']);
+}
+
+// -----------------------------
+// 분/시간 단위 캔들
+// -----------------------------
+// 두 곳에서 읽어 이어 붙인다.
+//   ① stock_candles_1m — 수집기가 실시간으로 쌓는 1분봉(영구보존). 빠르다.
+//   ② stock_logs       — 아직 1분봉으로 안 굳은 '최근 구간'을 즉석 집계해서 보강.
+// 이렇게 하면 수집기가 잠깐 죽었거나 분봉 모듈을 아직 재시작 안 했어도
+// 차트에 구멍이 나지 않는다(자가 치유). 경계는 `>` 로 잡아 중복 캔들이 안 생긴다.
+function getMinuteCandles($conn, $stockCode, $days, $bucketSec)
+{
+    $from = getRangeStart($conn, $days);
+    if ($from === null) return [];
+
+    // ① 1분봉 테이블에서 읽어 bucketSec 단위로 묶는다.
+    $rows = groupCandleRows(
+        $conn,
+        "SELECT
+            FROM_UNIXTIME(FLOOR(UNIX_TIMESTAMP(ts) / ?) * ?) AS bts,
+            SUBSTRING_INDEX(GROUP_CONCAT(open_p  ORDER BY ts ASC),  ',', 1) AS o,
+            MAX(high_p) AS h,
+            MIN(low_p)  AS l,
+            SUBSTRING_INDEX(GROUP_CONCAT(close_p ORDER BY ts DESC), ',', 1) AS c,
+            SUM(vol_delta) AS v
+         FROM stock_candles_1m
+         WHERE stock_code = ? AND ts >= ?
+         GROUP BY bts ORDER BY bts ASC",
+        "iiss",
+        [$bucketSec, $bucketSec, $stockCode, $from]
+    );
+
+    // ② 1분봉이 어디까지 있는지 확인 → 그 이후 구간만 원시 로그로 메운다.
+    $tail = $from;
+    if ($rows) {
+        $lastTs = mysqli_fetch_assoc(dbQueryOne(
+            $conn,
+            "SELECT MAX(ts) AS m FROM stock_candles_1m WHERE stock_code = ? AND ts >= ?",
+            "ss",
+            [$stockCode, $from]
+        ));
+        if (!empty($lastTs['m'])) $tail = $lastTs['m'];
     }
 
-    $candles = [];
-    foreach ($buckets as $minuteKey => $prices) {
-        $candles[] = [
-            'time'  => strtotime($minuteKey . ':00'),
-            'open'  => $prices[0],
-            'high'  => max($prices),
-            'low'   => min($prices),
-            'close' => end($prices),
+    $rawRows = groupCandleRows(
+        $conn,
+        "SELECT
+            FROM_UNIXTIME(FLOOR(UNIX_TIMESTAMP(created_at) / ?) * ?) AS bts,
+            SUBSTRING_INDEX(GROUP_CONCAT(price ORDER BY id ASC),  ',', 1) AS o,
+            MAX(price) AS h,
+            MIN(price) AS l,
+            SUBSTRING_INDEX(GROUP_CONCAT(price ORDER BY id DESC), ',', 1) AS c,
+            (MAX(volume) - MIN(volume)) AS v
+         FROM stock_logs
+         WHERE stock_code = ? AND created_at > ?
+         GROUP BY bts ORDER BY bts ASC",
+        "iiss",
+        [$bucketSec, $bucketSec, $stockCode, $tail]
+    );
+
+    // ①의 마지막 버킷과 ②의 첫 버킷이 같은 칸일 수 있다(예: 10:00:30까지만 분봉이 있는 경우).
+    // 그때는 뒤에서 온 값(원시 로그 = 더 최신)이 이기게 덮어쓴다.
+    $merged = [];
+    foreach (array_merge($rows, $rawRows) as $r) $merged[$r['time']] = $r;
+    ksort($merged);
+    return array_values($merged);
+}
+
+// -----------------------------
+// 일봉
+// -----------------------------
+// 일봉은 KIS 일봉 API로 백필해 둔 stock_candles_1d 를 그대로 읽는다(가공 없음).
+// 시간축은 유닉스 초가 아니라 'YYYY-MM-DD' 문자열을 준다 — lightweight-charts가
+// 이걸 'business day'로 알아듣고 주말·휴장일을 알아서 건너뛰어 그린다.
+function getDailyCandles($conn, $stockCode, $days)
+{
+    ensureCandle1dTable($conn);
+    $res = dbQueryOne(
+        $conn,
+        "SELECT d, open_p, high_p, low_p, close_p, volume
+         FROM stock_candles_1d
+         WHERE stock_code = ? AND d >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+         ORDER BY d ASC",
+        "si",
+        [$stockCode, $days]
+    );
+
+    $out = [];
+    while ($row = mysqli_fetch_assoc($res)) {
+        $out[] = [
+            'time'   => $row['d'],                 // 'YYYY-MM-DD'
+            'open'   => (float) $row['open_p'],
+            'high'   => (float) $row['high_p'],
+            'low'    => (float) $row['low_p'],
+            'close'  => (float) $row['close_p'],
+            'volume' => (float) $row['volume'],
         ];
     }
+    return $out;
+}
 
-    return $candles;
+// 기간 시작 시각을 'DB 시계' 기준으로 만든다.
+// ⚠️ PHP의 date()로 만들면 안 된다 — PHP는 UTC, DB 세션은 KST(+09:00)라 9시간 어긋나
+//    '오늘'을 통째로 놓치거나 엉뚱한 구간을 보게 된다. 항상 DB에게 물어본다.
+function getRangeStart($conn, $days)
+{
+    $res = dbQueryOne(
+        $conn,
+        $days <= 1
+            ? "SELECT CAST(CURDATE() AS DATETIME) AS s"     // 1D는 '오늘 00:00부터'
+            : "SELECT DATE_SUB(NOW(), INTERVAL ? DAY) AS s",
+        $days <= 1 ? "" : "i",
+        $days <= 1 ? [] : [$days]
+    );
+    $row = mysqli_fetch_assoc($res);
+    return $row['s'] ?? null;
+}
+
+// prepared statement 실행 후 결과셋을 돌려주는 짧은 헬퍼 (같은 6줄을 계속 안 쓰려고)
+function dbQueryOne($conn, $sql, $types, $params)
+{
+    $stmt = mysqli_prepare($conn, $sql);
+    if ($types !== "") mysqli_stmt_bind_param($stmt, $types, ...$params);
+    mysqli_stmt_execute($stmt);
+    return mysqli_stmt_get_result($stmt);
+}
+
+// GROUP_CONCAT 기반 버킷 쿼리를 실행해 캔들 배열로 변환.
+// ⚠️ group_concat_max_len 기본값은 1024바이트다. 30분 버킷이면 한 칸에 값이 180개까지
+//    들어가 1024를 넘고, 넘으면 MySQL이 조용히 잘라서 '시가/종가가 틀린' 캔들이 나온다.
+//    그래서 세션 한도를 넉넉히 올려두고 쓴다.
+function groupCandleRows($conn, $sql, $types, $params)
+{
+    static $raised = false;
+    if (!$raised) { mysqli_query($conn, "SET SESSION group_concat_max_len = 1048576"); $raised = true; }
+
+    $res = dbQueryOne($conn, $sql, $types, $params);
+    $out = [];
+    while ($row = mysqli_fetch_assoc($res)) {
+        $out[] = [
+            'time'   => chartTs($row['bts']),
+            'open'   => (float) $row['o'],
+            'high'   => (float) $row['h'],
+            'low'    => (float) $row['l'],
+            'close'  => (float) $row['c'],
+            'volume' => (float) max(0, (int) $row['v']),   // 음수 방어(누적거래량이 리셋되는 날짜 경계)
+        ];
+    }
+    return $out;
 }
 
 // -----------------------------

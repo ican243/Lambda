@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>모아증권 코드 공부노트 · 1편 개념·구조</title>
+<style>
+  :root{
+    --bg:#0f141a; --card:#161d26; --card2:#1b232e; --line:#26303c;
+    --text:#d9e0e8; --sub:#8b97a6; --dim:#6b7686;
+    --accent:#4a90ff; --up:#ff5f6e; --down:#4a90ff; --ok:#3ecf8e; --warn:#ffcf5c;
+    --code:#0c1218; --chip:#22303f;
+  }
+  *{box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic","맑은 고딕",Pretendard,system-ui,sans-serif;
+    font-size:17px; line-height:1.8; letter-spacing:-0.01em;
+    -webkit-font-smoothing:antialiased;
+    word-break:keep-all; overflow-wrap:anywhere;
+  }
+  .wrap{max-width:760px; margin:0 auto; padding:0 18px 120px;}
+  .top{position:sticky; top:0; z-index:20; background:rgba(15,20,26,.92); backdrop-filter:blur(8px); border-bottom:1px solid var(--line); padding:14px 18px;}
+  .top b{color:#fff; font-size:17px;} .top b span{color:var(--accent);}
+  .top .mini{color:var(--sub); font-size:12px; margin-top:2px;}
+  .hero{padding:34px 0 10px;}
+  .hero h1{font-size:30px; line-height:1.35; margin:0 0 10px; color:#fff; font-weight:800;}
+  .hero p{color:var(--sub); margin:0; font-size:15px;}
+  .toc{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px 18px; margin:22px 0;}
+  .toc h3{margin:0 0 10px; font-size:14px; color:var(--sub); font-weight:700; letter-spacing:.02em;}
+  .toc a{display:block; color:var(--text); text-decoration:none; padding:7px 0; border-bottom:1px solid var(--line); font-size:15.5px;}
+  .toc a:last-child{border-bottom:none;}
+  .toc a span{color:var(--dim); font-size:13px;}
+  h2.sec{font-size:23px; color:#fff; margin:44px 0 6px; padding-top:12px; font-weight:800; border-top:2px solid var(--line);}
+  h2.sec .em{font-size:14px; color:var(--accent); display:block; font-weight:700; letter-spacing:.04em; margin-bottom:4px;}
+  h3.sub{font-size:18px; color:#eaf0f7; margin:30px 0 10px; font-weight:700;}
+  h4.ssub{font-size:16px; color:#cfe0f5; margin:22px 0 8px; font-weight:700;}
+  p{margin:12px 0;}
+  .lead{color:var(--sub); font-size:15.5px;}
+  b,strong{color:#fff;}
+  .accent{color:var(--accent);}
+  ul,ol{padding-left:22px; margin:12px 0;} li{margin:7px 0;}
+  .file{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:18px; margin:16px 0;}
+  .file .fn{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:16px; color:#fff; font-weight:700; word-break:break-all;}
+  .path{color:var(--dim); font-size:12.5px; font-family:ui-monospace,monospace; margin-top:2px; word-break:break-all;}
+  .chips{display:flex; flex-wrap:wrap; gap:6px; margin:12px 0;}
+  .chip{font-size:12px; padding:3px 9px; border-radius:999px; background:var(--chip); color:#b9c6d6; border:1px solid var(--line);}
+  .chip.name{background:#12233b; color:#7fb2ff; border-color:#1e3a5f;}
+  .chip.act{background:#122b22; color:#6be0a8; border-color:#1d4636;}
+  .chip.warn{background:#2e2612; color:#ffcf5c; border-color:#4a3d1a;}
+  .chip.new{background:#2b1230; color:#e79bff; border-color:#4a1e52;}
+  .lbl{color:var(--accent); font-weight:700; font-size:13.5px; letter-spacing:.02em; margin:14px 0 4px;}
+  .flow{counter-reset:s; list-style:none; padding-left:0;}
+  .flow li{position:relative; padding-left:30px; margin:8px 0;}
+  .flow li::before{counter-increment:s; content:counter(s); position:absolute; left:0; top:2px; width:21px; height:21px; background:var(--accent); color:#04101f; border-radius:50%; font-size:12px; font-weight:800; display:flex; align-items:center; justify-content:center;}
+  pre{background:var(--code); border:1px solid var(--line); border-radius:12px; padding:13px 14px; overflow-x:auto; font-size:13.5px; line-height:1.65; margin:12px 0;}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+  pre code{color:#c8d4e2;}
+  p code,li code,td code{background:var(--code); border:1px solid var(--line); border-radius:6px; padding:1px 6px; font-size:14px; color:#9fc3ff;}
+  .k{color:#ff8fa3;} .s{color:#8ee6b0;} .c{color:#6b7686; font-style:italic;} .f{color:#7fb2ff;}
+  .term{border-left:3px solid var(--accent); background:var(--card2); border-radius:0 12px 12px 0; padding:12px 14px; margin:10px 0;}
+  .term .w{font-weight:800; color:#fff;} .term .w .en{color:var(--dim); font-weight:500; font-size:13px;}
+  .tbl{width:100%; border-collapse:collapse; margin:12px 0; font-size:14px; display:block; overflow-x:auto;}
+  .tbl th,.tbl td{border:1px solid var(--line); padding:8px 10px; text-align:left; vertical-align:top;}
+  .tbl th{background:var(--card2); color:#cdd8e4; white-space:nowrap;}
+  .note{background:#12233b; border:1px solid #1e3a5f; border-radius:12px; padding:12px 14px; margin:14px 0; font-size:14.5px; color:#bcd4f2;}
+  .warn-box{background:#2a1e12; border:1px solid #4a3418; border-radius:12px; padding:12px 14px; margin:14px 0; font-size:14.5px; color:#ffddaa;}
+  .bad{background:#2c1418; border:1px solid #55222b; border-radius:12px; padding:12px 14px; margin:14px 0; font-size:14.5px; color:#ffc2cb;}
+  .good{background:#0f2a1e; border:1px solid #1d4a36; border-radius:12px; padding:12px 14px; margin:14px 0; font-size:14.5px; color:#a8e9c8;}
+  .diagram{background:var(--code); border:1px solid var(--line); border-radius:12px; padding:14px; font-family:ui-monospace,monospace; font-size:12.5px; line-height:1.7; overflow-x:auto; color:#9fb3c8; white-space:pre;}
+  hr{border:none; border-top:1px solid var(--line); margin:26px 0;}
+  .toup{color:var(--up);} .todown{color:var(--down);}
+  .qa{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px 16px; margin:12px 0;}
+  .qa .q{color:#fff; font-weight:700; font-size:16px; margin-bottom:6px;}
+  .qa .a{color:var(--text); font-size:15px;}
+  .pill{display:inline-block; font-size:12px; padding:2px 8px; border-radius:999px; background:var(--chip); color:#b9c6d6; border:1px solid var(--line); margin-left:6px; vertical-align:middle;}
+  .pill.n{background:#2b1230; color:#e79bff; border-color:#4a1e52;}
+  .codewrap{margin:14px 0;}
+  .codehead{background:var(--card2); border:1px solid var(--line); border-bottom:none; border-radius:12px 12px 0 0; padding:8px 12px; font-family:ui-monospace,monospace; font-size:12.5px; color:#9fc3ff; word-break:break-all;}
+  .codewrap pre{border-radius:0 0 12px 12px; margin:0;}
+  .ln{color:#3d4a59; user-select:none;}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <b>모아<span>증권</span> 코드 공부노트</b>
+  <div class="mini">1편 · 개념 · 구조 · 용어  |  기준일 2026-08-07</div>
+</div>
+
+<div class="wrap">
+
+<div class="hero">
+  <h1>1편 — 개념·구조·용어</h1>
+  <p>"이 프로젝트가 뭘로 되어 있고, 왜 그렇게 짰나"를 처음부터 끝까지.<br>
+  실제 코드 한 줄 한 줄은 <b>2편 — 코드 해석편</b>에서 다룹니다.</p>
+</div>
+
+<div class="note">
+<b>이 노트를 읽는 법</b><br>
+1편은 <b>지도</b>입니다. 전체 그림 → 용어 → 테이블 → 파일 → 흐름 → 보안 → 실전 순서로 갑니다.<br>
+모르는 단어가 나오면 <a href="#terms" style="color:#7fb2ff">§3 용어사전</a>으로 돌아오세요. 전부 거기 있습니다.
+</div>
+
+<div class="warn-box">
+<b>2026-08-07 개정판에서 크게 달라진 것</b><br>
+지난 판(7/28) 이후 프로젝트의 <b>뼈대가 두 군데 바뀌었습니다</b>. 옛 노트를 기억하고 있다면 여기부터 보세요.<br>
+① <b>DB가 로컬에서 원격 공용 DB로 옮겨갔습니다</b> — 파이썬 팀원과 같은 DB를 씁니다. 이 한 줄이 타임존·용량·보안 판단을 전부 바꿉니다. (<a href="#arch" style="color:#7fb2ff">§4</a>)<br>
+② <b>차트가 "틱 → 1분봉 → 일봉" 3단 파이프라인이 됐습니다</b> — 테이블 2개(<code>stock_candles_1m</code>·<code>stock_candles_1d</code>)와 cron 3개가 새로 생겼습니다. (<a href="#candle" style="color:#7fb2ff">§7</a>)
+</div>
+
+<div class="toc">
+  <h3>목차</h3>
+  <a href="#overview">1. 이 프로젝트가 뭔가 <span>— 한 장 요약 + 설계결정 5</span></a>
+  <a href="#howweb">2. 웹이 돌아가는 원리 <span>— PHP와 JS는 어디서 실행되나</span></a>
+  <a href="#terms">3. 용어사전 <span>— 75개 (6개 분야)</span></a>
+  <a href="#arch">4. 전체 아키텍처 <span>— 5개 덩어리 + 원격 공용 DB</span></a>
+  <a href="#db">5. 데이터베이스 30개 테이블 <span>— 우리 19 + 파이썬팀 11</span></a>
+  <a href="#files">6. 파일 지도 <span>— 56개 PHP + 8개 JS 전부</span></a>
+  <a href="#flow">7. 데이터가 흐르는 4가지 길 <span>— REST / WS / cron / 캔들</span></a>
+  <a href="#candle">8. 캔들 파이프라인 심화 <span>— 이 프로젝트의 심장</span></a>
+  <a href="#security">9. 보안 설계 <span>— 16가지 방어</span></a>
+  <a href="#scenario">10. 실전 시나리오 6개 <span>— 처음부터 끝까지 추적</span></a>
+  <a href="#trouble">11. 트러블슈팅 사례집 <span>— 실제로 터졌던 13건</span></a>
+  <a href="#principle">12. 실무 원칙 <span>— 왜 이렇게 짰나</span></a>
+  <a href="#interview">13. 면접 예상질문 25개 <span>— 답변 포함</span></a>
+</div>
+
+
+<!-- ============================================ -->
+<h2 class="sec" id="overview"><span class="em">SECTION 1</span>이 프로젝트가 뭔가</h2>
+
+<p class="lead">한 줄로: <b>한국투자증권(KIS) 오픈API로 진짜 시세를 받아와, 토스증권처럼 생긴 화면에서 가짜 돈으로 주식을 사고파는 웹사이트.</b></p>
+
+<h3 class="sub">1-1. 진짜인 것과 가짜인 것</h3>
+
+<table class="tbl">
+<tr><th>항목</th><th>진짜 / 가짜</th><th>설명</th></tr>
+<tr><td>주가·거래량·호가</td><td><b class="toup">진짜</b></td><td>한국투자증권에서 실시간으로 받아옵니다. 삼성전자가 오르면 우리 화면도 오릅니다.</td></tr>
+<tr><td>차트 과거 데이터</td><td><b class="toup">진짜</b></td><td>KIS 일봉 API로 2년치를 받아 저장해 뒀습니다.</td></tr>
+<tr><td>내 돈·내 주식</td><td><b class="todown">가짜</b></td><td>가입하면 1,000만원을 줍니다. 우리 DB 안의 숫자일 뿐입니다.</td></tr>
+<tr><td>매수·매도 체결</td><td><b class="todown">가짜</b></td><td>실제 시장에 주문이 나가지 않습니다. 우리 DB에서 잔고를 깎고 보유수량을 늘립니다.</td></tr>
+</table>
+
+<div class="note">
+<b>왜 이게 포트폴리오로 좋은가</b><br>
+"CRUD 게시판"과 달리 <b>외부 실시간 데이터</b>, <b>돈 계산의 정확성</b>, <b>시계열 데이터 압축</b>, <b>동시성(트랜잭션)</b>을 전부 다뤄야 합니다.
+면접에서 "왜 이렇게 짰나"를 물었을 때 답할 거리가 각 주제마다 있습니다. 이 노트 §13이 그 답변 모음입니다.
+</div>
+
+<h3 class="sub">1-2. 다섯 가지 핵심 설계 결정</h3>
+
+<p>이 프로젝트를 이해한다는 건 사실 <b>이 다섯 개의 "왜"를 아는 것</b>입니다. 나머지는 곁가지입니다.</p>
+
+<div class="file">
+<div class="fn">① 화면은 DB를 기다리지 않는다</div>
+<p>실시간 체결이 오면 <b>브라우저로 먼저 쏘고</b>, 그 다음에 DB에 저장합니다. 순서를 반대로 하면 DB가 느려질 때 화면까지 같이 멎습니다.
+원격 공용 DB를 쓰는 지금은 더 중요해졌습니다.</p>
+<div class="chips"><span class="chip name">stock-ws/index.js</span><span class="chip act">handleTrade()</span></div>
+</div>
+
+<div class="file">
+<div class="fn">② 저장은 줄이고, 정확도는 안 줄인다 <span class="pill n">스로틀 + 분봉</span></div>
+<p>체결은 초당 수십 건씩 옵니다. 전부 저장하면 DB가 터집니다. 그래서 <b>원시 기록은 10초에 1건만</b> 저장합니다.
+그런데 그러면 그 10초 사이의 최고가·최저가가 사라집니다.<br>
+→ 해결: <b>모든 체결은 메모리에서 1분봉으로 누적</b>하고, DB에는 10초마다 한 번만 씁니다. 저장량은 줄고 OHLC 정밀도는 원본 그대로입니다.</p>
+<div class="chips"><span class="chip name">stock-ws/candles.js</span><span class="chip act">accumulateCandle()</span></div>
+</div>
+
+<div class="file">
+<div class="fn">③ 어느 기간을 눌러도 캔들 수는 수백 개 <span class="pill n">해상도 분리</span></div>
+<p>1분봉으로 1년을 그리면 캔들이 9만 개, JSON이 수 MB가 됩니다. 브라우저가 멈춥니다.<br>
+→ 해결: <b>기간마다 봉의 굵기를 바꿉니다.</b> 1일=1분봉, 1주=5분봉, 1개월 이상=일봉.
+그래서 "1년 보기"가 "오늘 보기"보다 무거워지지 않습니다.</p>
+<div class="chips"><span class="chip name">user/func.php</span><span class="chip act">chartRangeSpec()</span></div>
+</div>
+
+<div class="file">
+<div class="fn">④ 시각은 항상 DB에게 물어본다 <span class="pill n">타임존</span></div>
+<p>원격 DB 서버의 시계는 <b>UTC</b>인데 우리 데이터·로직은 전부 <b>KST(한국시간)</b>입니다. PHP는 또 UTC로 돕니다.
+세 개가 어긋나면 "오늘"이 통째로 사라집니다.<br>
+→ 규칙: <b>날짜·시각 계산은 PHP의 <code>date()</code>가 아니라 DB의 <code>NOW()</code>/<code>CURDATE()</code>로</b> 합니다. 커넥션마다 <code>SET time_zone='+09:00'</code>도 겁니다.</p>
+<div class="chips"><span class="chip warn">이 프로젝트에서 가장 많이 터진 버그 유형</span></div>
+</div>
+
+<div class="file">
+<div class="fn">⑤ 스키마는 코드가 알아서 만든다 <span class="pill n">ensure*()</span></div>
+<p>새 기능을 붙일 때 "형이 SQL을 직접 돌려야 함"이 되면, 다음 세션에서 잊어버리고 "왜 안 되지"로 시간을 버립니다.<br>
+→ 규칙: 테이블·컬럼이 필요하면 <b>코드가 <code>CREATE TABLE IF NOT EXISTS</code> / <code>information_schema</code> 확인 후 ALTER</b>를 스스로 합니다.
+<code>ensureOpsSchema</code>, <code>ensurePostsTable</code>, <code>ensureCandle1dTable</code>, <code>ensureAutoTradeSchema</code>, <code>ensureAdminSchema</code> 5개가 그 역할입니다.</p>
+</div>
+
+<h3 class="sub">1-3. 지금 규모 (2026-08-07 실측)</h3>
+<table class="tbl">
+<tr><th>항목</th><th>값</th></tr>
+<tr><td>PHP 파일</td><td>56개 (user 33 · admin 12 · config 7 · cron 8, .htaccess 별도)</td></tr>
+<tr><td>JS 파일 (Node)</td><td>8개 (stock-ws)</td></tr>
+<tr><td>DB 테이블</td><td>30개 (우리 19 + 파이썬 팀원 11)</td></tr>
+<tr><td>추적 종목</td><td>기본 111개 + 순위/관심 종목 → 일봉 백필 대상 129개</td></tr>
+<tr><td>실시간 구독</td><td>상위 40종목 (KIS 세션당 약 41건 제한)</td></tr>
+<tr><td><code>stock_logs</code> (원시 틱)</td><td>약 294만 행</td></tr>
+<tr><td><code>stock_candles_1m</code> (1분봉)</td><td>약 12만 행</td></tr>
+<tr><td><code>stock_candles_1d</code> (일봉)</td><td>약 6.2만 행 / 129종목 / 2024-07~2026-08</td></tr>
+</table>
+
+
+<!-- ============================================ -->
+<h2 class="sec" id="howweb"><span class="em">SECTION 2</span>웹이 돌아가는 원리</h2>
+
+<p class="lead">코드를 읽기 전에 이것부터. <b>"이 코드가 어디서 실행되는가"</b>를 모르면 모든 게 헷갈립니다.</p>
+
+<h3 class="sub">2-1. 서버와 브라우저는 다른 컴퓨터다</h3>
+
+<div class="diagram">   [브라우저 = 형 PC]                        [서버 = Apache + PHP]
+        │                                          │
+        │  ①  "stock_detail.php 줘"  ─────────────▶ │
+        │                                          │  ② PHP가 실행됨
+        │                                          │     - DB 조회
+        │                                          │     - HTML 문자열 조립
+        │  ③  완성된 HTML  ◀───────────────────────  │
+        │                                          │
+        │  ④ 브라우저가 HTML을 그림                    │
+        │     이때부터 JS가 실행됨                     │     (PHP는 이미 끝났음)
+        │                                          │
+        │  ⑤ JS가 fetch()로 추가 요청  ─────────────▶ │  ⑥ get_stock_chart.php 실행
+        │     (화면 안 바뀜)                         │     JSON만 응답
+        │  ⑦ JSON 받아서 화면 일부만 갱신  ◀────────── │</div>
+
+<div class="term">
+<div class="w">핵심 <span class="en">여기서 헷갈리면 다 헷갈립니다</span></div>
+<b>PHP는 HTML을 만들어 보내면 그 순간 끝납니다.</b> 브라우저에서 버튼을 눌러도 그 PHP는 이미 죽었습니다.
+그래서 화면을 바꾸려면 ⓐ JS가 직접 바꾸거나 ⓑ 새 요청을 보내 PHP를 <b>다시</b> 실행해야 합니다.
+</div>
+
+<h3 class="sub">2-2. 우리 프로젝트에서 누가 뭘 하나</h3>
+<table class="tbl">
+<tr><th>실행 위치</th><th>언어</th><th>맡은 일</th></tr>
+<tr><td>서버 (Apache)</td><td>PHP</td><td>로그인 판정, 매수/매도 계산, DB 접근, HTML 생성, JSON API</td></tr>
+<tr><td>브라우저</td><td>JS</td><td>차트 그리기, 실시간 갱신, 탭 전환, 위젯 드래그</td></tr>
+<tr><td>서버 (별도 프로세스)</td><td>Node.js</td><td>KIS와 24시간 웹소켓 연결 유지, 브라우저로 시세 중계, 분봉 누적</td></tr>
+<tr><td>서버 (주기 실행)</td><td>PHP (CLI)</td><td>cron — 시세 보충 수집, 순위 계산, 분봉 보정, 일봉 백필, 로그 정리</td></tr>
+</table>
+
+<div class="warn-box">
+<b>Node가 왜 따로 필요한가?</b><br>
+PHP는 "요청이 오면 실행되고 응답하면 죽는" 구조라 <b>24시간 연결을 유지할 수 없습니다.</b>
+KIS 실시간 시세는 웹소켓으로 계속 흘러오므로, 끊기지 않고 살아 있는 프로세스가 필요합니다. 그게 <code>stock-ws</code>(Node)입니다.
+</div>
+
+
+<!-- ============================================ -->
+<h2 class="sec" id="terms"><span class="em">SECTION 3</span>용어사전 — 75개</h2>
+
+<p class="lead">이 프로젝트를 읽다 막히는 단어는 거의 다 여기 있습니다. 6개 분야로 묶었습니다.</p>
+
+<h3 class="sub">A. 웹 기본 (12개)</h3>
+
+<div class="term"><div class="w">HTTP <span class="en">HyperText Transfer Protocol</span></div>브라우저와 서버가 대화하는 약속. "이거 줘(GET)", "이거 처리해줘(POST)" 같은 요청과, 숫자 코드로 된 응답(200 성공, 403 금지, 404 없음, 500 서버오류)으로 이뤄집니다.</div>
+<div class="term"><div class="w">GET / POST</div>GET은 <b>주소창에 다 보이는</b> 요청(조회용), POST는 <b>본문에 숨겨 보내는</b> 요청(변경용). 매수 주문 같은 건 반드시 POST여야 합니다 — GET이면 링크 한 번에 주문이 나갑니다.</div>
+<div class="term"><div class="w">쿼리스트링 <span class="en">query string</span></div>주소 뒤 <code>?stock_code=005930&amp;range=1D</code> 부분. 서버에서 <code>$_GET['stock_code']</code>로 읽습니다.</div>
+<div class="term"><div class="w">JSON</div>데이터를 주고받는 문자열 형식. <code>{"price":235000}</code> 처럼 생겼습니다. PHP는 <code>json_encode()</code>로 만들고, JS는 <code>res.json()</code>으로 읽습니다.</div>
+<div class="term"><div class="w">API / 엔드포인트</div>"프로그램끼리 대화하는 창구". 우리 <code>user/get_quote.php</code>는 <b>우리가 만든</b> API고, KIS의 <code>inquire-price</code>는 <b>남이 만든</b> API입니다.</div>
+<div class="term"><div class="w">REST</div>"필요할 때 한 번 물어보고 답 받고 끝"인 통신 방식. 새로고침해야 새 값이 옵니다. 반대는 웹소켓.</div>
+<div class="term"><div class="w">웹소켓 <span class="en">WebSocket</span></div>한 번 연결해두면 <b>서버가 먼저 말을 걸 수 있는</b> 통로. 시세처럼 계속 바뀌는 데이터에 씁니다. 주소가 <code>http</code>가 아니라 <code>ws</code>로 시작합니다.</div>
+<div class="term"><div class="w">fetch()</div>JS에서 화면 새로고침 없이 서버에 요청하는 함수. 우리 차트 기간 탭이 이걸로 동작합니다.</div>
+<div class="term"><div class="w">세션 <span class="en">session</span></div>서버가 "이 브라우저는 3번 유저"라고 기억하는 것. 브라우저엔 열쇠(쿠키)만 주고 <b>내용은 서버에 둡니다</b>. 그래서 사용자가 못 고칩니다.</div>
+<div class="term"><div class="w">쿠키 <span class="en">cookie</span></div>브라우저가 들고 다니는 작은 쪽지. 우리는 세션 ID만 담습니다.</div>
+<div class="term"><div class="w">리다이렉트 <span class="en">redirect</span></div>"거기 말고 저기로 가"라는 응답(302). <code>header('Location: ...')</code>. 반드시 뒤에 <code>exit;</code>를 붙여야 합니다 — 안 붙이면 아래 코드가 계속 실행됩니다.</div>
+<div class="term"><div class="w">.htaccess</div>Apache에게 주는 폴더별 지시서. 우리는 <code>config/</code>와 <code>stock-ws/</code>를 웹에서 아예 못 열게 막는 데 씁니다.</div>
+
+<h3 class="sub">B. 언어·화면 (13개)</h3>
+
+<div class="term"><div class="w">변수 / 배열 / 연관배열</div>PHP 변수는 <code>$</code>로 시작. 배열은 값의 줄, 연관배열은 <code>['price' =&gt; 235000]</code>처럼 이름표가 붙은 배열. DB 한 행이 보통 연관배열로 옵니다.</div>
+<div class="term"><div class="w">함수 <span class="en">function</span></div>이름 붙인 코드 묶음. 같은 걸 여러 곳에서 쓰려고 만듭니다. <code>processBuy()</code>처럼.</div>
+<div class="term"><div class="w">require_once</div>다른 PHP 파일을 <b>서버 안에서</b> 불러오기. 웹으로 접근 못 하게 막아도 이건 잘 됩니다(그래서 <code>config/.htaccess</code>가 안전합니다).</div>
+<div class="term"><div class="w">예외 <span class="en">Exception</span></div>"여기서 더 진행하면 안 됨"을 알리는 장치. <code>throw</code>로 던지고 <code>try/catch</code>로 받습니다. 우리 매수/매도가 이걸로 롤백을 판단합니다.</div>
+<div class="term"><div class="w">삼항 연산자</div><code>조건 ? A : B</code> — 짧은 if. <code>??</code>는 "왼쪽이 없으면 오른쪽"(null 병합).</div>
+<div class="term"><div class="w">DOM</div>브라우저가 HTML을 다루는 구조. <code>document.getElementById('chart')</code>로 특정 요소를 집어 옵니다.</div>
+<div class="term"><div class="w">이벤트 <span class="en">event</span></div>클릭·입력 같은 사건. <code>addEventListener('click', ...)</code>로 "이 일이 생기면 이걸 해라"를 등록합니다.</div>
+<div class="term"><div class="w">이벤트 위임 <span class="en">delegation</span></div>버튼 6개에 각각 리스너를 다는 대신 <b>부모에 하나만</b> 달고 <code>e.target.closest()</code>로 누가 눌렸는지 찾는 방식. 우리 기간 탭이 이걸 씁니다.</div>
+<div class="term"><div class="w">async / await</div>"오래 걸리는 일(네트워크·DB)을 기다리되, 그동안 다른 일은 막지 않는다". <code>await</code> 앞의 함수는 <code>async</code>여야 합니다.</div>
+<div class="term"><div class="w">Promise</div>"나중에 값이 올 것"을 담은 상자. <code>await</code>가 그 상자를 열어줍니다.</div>
+<div class="term"><div class="w">Map</div>JS의 키-값 저장소. 객체와 비슷하지만 키 종류가 자유롭고 크기를 <code>.size</code>로 바로 압니다. 우리 분봉 누적기가 <code>Map&lt;"종목|분", 캔들&gt;</code>을 씁니다.</div>
+<div class="term"><div class="w">setInterval</div>"N밀리초마다 반복 실행". 분봉 저장(10초), 요약 로그(30초), 워치독(30초)에 씁니다.</div>
+<div class="term"><div class="w">CSS 변수</div><code>--accent:#4a90ff</code>처럼 색을 이름으로 정의해두고 <code>var(--accent)</code>로 쓰는 것. 색 하나만 고치면 사이트 전체가 바뀝니다.</div>
+
+<h3 class="sub">C. 데이터베이스 (15개)</h3>
+
+<div class="term"><div class="w">테이블 / 행 / 컬럼</div>엑셀 시트 = 테이블, 가로줄 = 행(row), 세로칸 = 컬럼(column).</div>
+<div class="term"><div class="w">기본키 <span class="en">PRIMARY KEY</span></div>행을 유일하게 구분하는 값. 중복이 불가능합니다. <code>stock_candles_1m</code>은 <b>(종목코드, 시각)</b> 두 개를 묶어 기본키로 씁니다 — "같은 종목의 같은 분은 하나뿐"이라는 규칙이 여기서 강제됩니다.</div>
+<div class="term"><div class="w">인덱스 <span class="en">INDEX</span></div>책 뒤 찾아보기. 조회는 빨라지고 저장은 조금 느려지며 <b>용량을 먹습니다</b>. 우리 <code>stock_logs</code>는 인덱스가 데이터보다 큽니다(175MB vs 168MB).</div>
+<div class="term"><div class="w">외래키 <span class="en">FOREIGN KEY</span></div>"이 값은 저 테이블에 반드시 존재해야 함". <code>ON DELETE CASCADE</code>를 붙이면 부모가 지워질 때 자식도 같이 지워집니다.</div>
+<div class="term"><div class="w">JOIN</div>두 테이블을 이어 붙여 조회. <code>INNER JOIN</code>은 양쪽 다 있는 것만, <code>LEFT JOIN</code>은 왼쪽 건 다 두고 오른쪽은 없으면 NULL.</div>
+<div class="term"><div class="w">트랜잭션 <span class="en">transaction</span></div>"전부 성공하거나 전부 취소". 돈 계산의 핵심입니다. <code>begin_transaction</code> → 여러 쿼리 → <code>commit</code>, 문제가 생기면 <code>rollback</code>.</div>
+<div class="term"><div class="w">FOR UPDATE <span class="en">행 잠금</span></div>트랜잭션 안에서 읽은 행을 <b>다른 요청이 못 건드리게 잠급니다</b>. 이게 없으면 잔고 100만원으로 동시에 두 번 매수해서 잔고가 마이너스가 될 수 있습니다.</div>
+<div class="term"><div class="w">UPSERT <span class="en">INSERT ... ON DUPLICATE KEY UPDATE</span></div>"없으면 넣고, 있으면 고쳐라"를 한 방에. 분봉 저장의 핵심입니다.</div>
+<div class="term"><div class="w">INSERT IGNORE</div>"이미 있으면 <b>조용히 넘어가라</b>". <code>aggregate_candles.php</code>가 이걸 써서, 수집기가 만든 정밀 분봉을 절대 덮어쓰지 않습니다.</div>
+<div class="term"><div class="w">prepared statement</div>SQL 틀을 먼저 보내고 값을 따로 보내는 방식. 값이 SQL 문법으로 해석될 수 없어 <b>SQL 인젝션이 원천 차단</b>됩니다. <code>mysqli_prepare</code> + <code>bind_param</code>.</div>
+<div class="term"><div class="w">바인드 타입 <span class="en">"isd s"</span></div><code>bind_param("isid", ...)</code>의 문자열. i=정수, s=문자열, d=실수, b=바이너리. <b>순서와 개수가 값과 정확히 맞아야</b> 합니다.</div>
+<div class="term"><div class="w">GROUP BY / 집계함수</div>같은 값끼리 묶어 <code>MAX</code>·<code>MIN</code>·<code>SUM</code>·<code>COUNT</code>를 냅니다. 분봉 만들기가 바로 "1분 단위로 GROUP BY 해서 MAX=고가, MIN=저가".</div>
+<div class="term"><div class="w">GROUP_CONCAT 관용구</div>MySQL엔 "그룹의 첫 값"을 뽑는 집계함수가 없습니다. 그래서 <code>SUBSTRING_INDEX(GROUP_CONCAT(price ORDER BY id ASC), ',', 1)</code>로 시가를 뽑는 관용구를 씁니다. <b class="toup">⚠️ 기본 길이 제한이 1024바이트</b>라 넘으면 조용히 잘립니다 → <code>SET SESSION group_concat_max_len</code> 필수.</div>
+<div class="term"><div class="w">컬레이션 <span class="en">collation</span></div>문자 비교 규칙. 우리 DB엔 3종이 섞여 있어서, 맞추지 않으면 JOIN이 "illegal mix of collations"로 깨집니다. 새 테이블은 <code>utf8mb3_unicode_ci</code>로 맞춥니다.</div>
+<div class="term"><div class="w">OPTIMIZE TABLE</div>InnoDB는 DELETE만으로는 디스크가 안 줄어듭니다(빈 공간을 재사용할 뿐). 실제로 반납하려면 이 명령이 필요한데, 테이블을 통째로 다시 써서 <b>장중에 돌리면 수집이 멈춥니다</b>.</div>
+
+<h3 class="sub">D. 시계열·차트 (14개) <span class="pill n">이번 판 신설</span></h3>
+
+<div class="term"><div class="w">틱 <span class="en">tick</span></div>체결 1건. "누가 몇 주를 얼마에 샀다"는 한 사건. 우리 <code>stock_logs</code>가 이 원본입니다.</div>
+<div class="term"><div class="w">캔들 / OHLC</div>일정 시간 동안의 가격을 막대 하나로 요약한 것. <b>O</b>pen(시가·첫 가격), <b>H</b>igh(고가·최고), <b>L</b>ow(저가·최저), <b>C</b>lose(종가·마지막 가격).</div>
+<div class="term"><div class="w">해상도 <span class="en">resolution</span></div>봉 하나가 담는 시간. 1분봉·5분봉·일봉. <b>기간이 길수록 봉을 굵게</b> 해야 캔들 개수가 안 터집니다.</div>
+<div class="term"><div class="w">버킷 <span class="en">bucket</span></div>시간을 일정 간격으로 나눈 칸. <code>FLOOR(UNIX_TIMESTAMP(ts)/300)*300</code> = 5분 칸으로 내림. 같은 칸에 든 값들을 묶으면 5분봉이 됩니다.</div>
+<div class="term"><div class="w">누적거래량 <span class="en">acml_vol</span></div>그날 <b>0시부터 지금까지 합계</b>. 계속 증가하다 다음 날 0으로 리셋됩니다. 그래서 "이 1분에 얼마나 거래됐나"를 알려면 <b>뺄셈</b>이 필요합니다.</div>
+<div class="term"><div class="w">델타 <span class="en">delta</span></div>"지난번 이후 늘어난 몫". 진행 중인 분을 10초마다 여러 번 저장할 때, 총합을 매번 보내면 DB에서 더할 때 중복 가산됩니다. 그래서 늘어난 몫만 보내고 0으로 리셋합니다.</div>
+<div class="term"><div class="w">스로틀 <span class="en">throttle</span></div>"아무리 많이 와도 N초에 한 번만 처리". 우리는 <code>stock_logs</code> 10초, <code>stock_latest</code> 1초로 겁니다.</div>
+<div class="term"><div class="w">백필 <span class="en">backfill</span></div>과거 데이터를 뒤늦게 채워 넣기. 우리는 KIS 일봉 API로 2년치를 백필했습니다.</div>
+<div class="term"><div class="w">수정주가 <span class="en">adjusted price</span></div>액면분할·유상증자로 주식 수가 바뀌면 과거 가격을 지금 기준으로 환산해야 차트가 안 튑니다. KIS 파라미터 <code>FID_ORG_ADJ_PRC=0</code>이 그걸 켭니다.</div>
+<div class="term"><div class="w">business day</div>lightweight-charts가 <code>'2026-08-07'</code> 같은 <b>문자열</b> 시각을 받으면 "영업일"로 알아듣고 <b>주말·휴장일을 알아서 건너뜁니다</b>. 숫자(유닉스 초)를 주면 그렇게 안 됩니다. 일봉엔 반드시 문자열을 줘야 합니다.</div>
+<div class="term"><div class="w">유닉스 시간 <span class="en">unix timestamp</span></div>1970-01-01 UTC부터 흐른 초. 시간 계산·비교가 쉬워서 차트 라이브러리가 이걸 씁니다.</div>
+<div class="term"><div class="w">UTC / KST</div>UTC는 세계표준시, KST는 한국시간 = UTC+9. 원격 DB 서버는 UTC, 우리 데이터는 KST → 이 9시간 차이가 이 프로젝트 버그의 단골 원인입니다.</div>
+<div class="term"><div class="w">자가 치유 <span class="en">self-healing</span></div>분봉 테이블을 읽고, <b>그 뒤 구간만</b> 원시 로그로 즉석 보강하는 설계. 수집기가 잠깐 죽어 있었어도 차트에 구멍이 안 생깁니다.</div>
+<div class="term"><div class="w">경계 잠금 <span class="en">fixLeftEdge / fixRightEdge</span></div>차트를 데이터 바깥으로 못 끌어내게 막는 옵션. <b>둘 다 켜야</b> "최대 축소 = 전체 데이터가 화면에 딱 참"이 됩니다. 하나만 켜면 여백이 다시 생깁니다.</div>
+
+<h3 class="sub">E. 보안 (11개)</h3>
+
+<div class="term"><div class="w">SQL 인젝션</div>입력값에 SQL을 섞어 넣어 DB를 조작하는 공격. prepared statement가 정답입니다.</div>
+<div class="term"><div class="w">XSS <span class="en">Cross-Site Scripting</span></div>남이 쓴 글에 <code>&lt;script&gt;</code>를 넣어 다른 사람 브라우저에서 실행시키는 공격. <b>출력할 때</b> <code>htmlspecialchars()</code>(PHP) / <code>esc()</code>(JS)로 막습니다.</div>
+<div class="term"><div class="w">CSRF</div>로그인된 브라우저를 <b>다른 사이트가 시켜서</b> 우리 서버로 요청을 쏘게 하는 공격. 세션에만 있는 난수 토큰을 폼에 심고 대조해 막습니다.</div>
+<div class="term"><div class="w">hash_equals()</div>문자열 비교를 <b>항상 같은 시간</b>에 하는 함수. <code>==</code>는 앞글자가 다르면 즉시 끝나서, 응답 시간 차이로 토큰을 한 글자씩 알아낼 수 있습니다(타이밍 공격).</div>
+<div class="term"><div class="w">password_hash / password_verify</div>비밀번호를 되돌릴 수 없게 저장하고, 검증은 원문 비교 없이 합니다. <b>DB가 털려도 비밀번호는 안 털립니다.</b></div>
+<div class="term"><div class="w">RBAC <span class="en">역할 기반 접근제어</span></div>"이 관리자는 무슨 역할이고, 그 역할은 뭘 할 수 있나". 우리 <code>adminCan()</code>이 담당합니다.</div>
+<div class="term"><div class="w">세션 분리</div>유저 세션(<code>USER_SESSION</code>)과 관리자 세션(<code>ADMIN_SESSION</code>)의 <b>이름을 다르게</b> 둡니다. 한쪽 로그인이 다른 쪽 권한이 되지 않습니다. CSRF 토큰도 자동으로 분리됩니다.</div>
+<div class="term"><div class="w">오픈 리다이렉트</div><code>?next=</code> 값을 그대로 믿고 이동하면 외부 피싱 사이트로 보낼 수 있습니다. <code>safeNext()</code>가 우리 사이트 안쪽 경로만 통과시킵니다.</div>
+<div class="term"><div class="w">권한 상승 방어</div>클라이언트가 보낸 값(가격·유저ID)을 <b>믿지 않고</b> 서버에서 다시 확인. 우리 <code>processBuy</code>가 수량·가격을 2차 검증하는 이유입니다.</div>
+<div class="term"><div class="w">시크릿 <span class="en">secret</span></div>DB 비밀번호, API 앱키처럼 남이 알면 안 되는 값. <b>웹에서 열리면 안 되고</b>, 문서·스크린샷에도 남으면 안 됩니다.</div>
+<div class="term"><div class="w">마스킹 <span class="en">masking</span></div>시크릿을 <code>••••</code>로 가리는 것. 이 노트의 빌더(<code>docs/build_note.php</code>)가 <b>빌드할 때 자동으로</b> 가리고, 결과물에 남았는지 최종 검사까지 합니다.</div>
+
+<h3 class="sub">F. 외부 연동·운영 (10개)</h3>
+
+<div class="term"><div class="w">KIS 오픈API</div>한국투자증권이 제공하는 시세·주문 API. 우리는 <b>모의투자(VTS)</b> 도메인(<code>openapivts...:29443</code>)을 씁니다.</div>
+<div class="term"><div class="w">앱키 / 앱시크릿</div>KIS가 준 우리 앱의 신분증. 이게 노출되면 남이 우리 이름으로 API를 씁니다.</div>
+<div class="term"><div class="w">액세스 토큰</div>앱키로 발급받는 <b>유효기간 있는</b> 출입증. 매번 발급받으면 제한에 걸리므로 <code>token_cache.json</code>에 23시간 캐싱합니다.</div>
+<div class="term"><div class="w">tr_id</div>KIS에서 "무슨 기능을 부를지" 고르는 코드. <code>FHKST01010100</code>=현재가, <code>FHKST03010100</code>=일봉, <code>VTTC0802U</code>=모의 매수.</div>
+<div class="term"><div class="w">해시키 <span class="en">hashkey</span></div>주문 데이터의 위변조를 막기 위해 KIS가 요구하는 서명값. 주문 본문을 먼저 보내 받아온 뒤 헤더에 실어 보냅니다.</div>
+<div class="term"><div class="w">EGW00201</div>KIS의 "초당 호출 제한 초과" 에러코드. 우리는 0.7초 쉬고 최대 3회 재시도합니다.</div>
+<div class="term"><div class="w">cron / 작업 스케줄러</div>"정해진 시각에 자동 실행". 리눅스는 cron, 윈도우는 작업 스케줄러. 우리 <code>cron/</code> 폴더 스크립트들이 이걸로 돌아야 합니다.</div>
+<div class="term"><div class="w">워치독 <span class="en">watchdog</span></div>"살아 있나?"를 주기적으로 확인해 죽었으면 되살리는 장치. 우리는 장중에 체결이 120초간 없으면 웹소켓 세션을 재접속합니다.</div>
+<div class="term"><div class="w">graceful shutdown</div>종료 신호(Ctrl+C = SIGINT)를 받으면 <b>하던 일을 마무리하고</b> 끕니다. 우리는 메모리에 있던 분봉을 마지막으로 저장하고 종료합니다.</div>
+<div class="term"><div class="w">로그 로테이션</div>로그 파일이 무한정 커지지 않게 주기적으로 새 파일로 바꾸는 것. 우리 <code>stock-ws/logs/app.log</code>는 <b>150MB를 넘겼고 아직 로테이션이 없습니다</b>(할 일).</div>
+
+<!-- ============================================ -->
+<h2 class="sec" id="arch"><span class="em">SECTION 4</span>전체 아키텍처</h2>
+
+<p class="lead">덩어리는 5개입니다. 그리고 <b>가운데 DB가 우리 것만이 아니라는 점</b>이 이번 판의 가장 큰 변화입니다.</p>
+
+<div class="diagram">                    ┌──────────────────────────┐
+                    │   한국투자증권 (KIS)        │
+                    │   REST API  +  WebSocket   │
+                    └────────┬─────────┬─────────┘
+                     REST    │         │  WebSocket (실시간 체결·호가)
+                             │         │
+        ┌────────────────────▼───┐ ┌───▼────────────────────┐
+        │  ② PHP (Apache)        │ │  ③ Node.js  stock-ws    │
+        │     화면 + API + cron   │ │     24시간 상주 프로세스   │
+        └────────┬───────────────┘ └───┬──────────────┬─────┘
+                 │                     │              │ WebSocket
+                 │                     │              │ (:8080)
+                 ▼                     ▼              ▼
+        ┌────────────────────────────────────┐  ┌──────────────┐
+        │  ④ 원격 공용 MySQL 8.0              │  │ ① 브라우저     │
+        │     lambda.cm-vw.com               │  │   HTML/JS     │
+        │     lambda_stock_db                │  │   차트·위젯     │
+        │     ⚠ 서버 시계 UTC                 │  └──────────────┘
+        │  ┌──────────────┬───────────────┐  │
+        │  │ 우리 19테이블  │ 파이썬팀 11테이블│  │
+        │  └──────────────┴───────────────┘  │
+        └────────────────────────────────────┘
+                          ▲
+                          │
+                 ┌────────┴─────────┐
+                 │ ⑤ 파이썬 팀원      │
+                 │   퀀트/백테스트     │
+                 └──────────────────┘</div>
+
+<h3 class="sub">4-1. 원격 공용 DB — 이게 왜 중요한가</h3>
+
+<div class="warn-box">
+<b>DB는 이제 형 PC에 없습니다.</b> <code>lambda.cm-vw.com</code>의 <code>lambda_stock_db</code>가 <b>원본</b>이고,
+같은 DB를 <b>파이썬 팀원이 함께 씁니다</b>. 로컬 Laragon의 <code>stock_db</code>는 옛날 사본이라 이제 쓰지 않습니다.
+</div>
+
+<p>이 한 줄이 바꾸는 것들:</p>
+<table class="tbl">
+<tr><th>영향</th><th>내용</th><th>대응</th></tr>
+<tr><td><b>타임존</b></td><td>서버 시계가 UTC. 우리 데이터·로직은 KST.</td><td>커넥션마다 <code>SET time_zone='+09:00'</code>. PHP <code>date()</code> 대신 DB <code>NOW()</code>.</td></tr>
+<tr><td><b>지연</b></td><td>왕복이 약 6ms. 40종목을 40번 나눠 쓰면 그것만 0.24초.</td><td>분봉은 <b>한 방의 multi-row INSERT</b>로 묶어 보냅니다.</td></tr>
+<tr><td><b>용량</b></td><td>내 디스크가 아니라 <b>남과 나눠 쓰는</b> 디스크.</td><td><code>purge_logs.php</code>로 원시 틱을 정리(7일 보존 시 344MB→약 48MB).</td></tr>
+<tr><td><b>충돌</b></td><td>테이블 이름이 겹치면 서로 깨뜨릴 수 있음.</td><td>파이썬 팀은 <code>py_</code> 접두사 계열, 우리는 <code>stock_</code> 계열로 사실상 분리돼 있음.</td></tr>
+<tr><td><b>보안</b></td><td>접속 정보가 <code>config/db.php</code>·<code>stock-ws/.env</code>에 평문.</td><td>둘 다 <code>.htaccess</code>로 웹 403 차단. <b>이 노트에서도 자동 마스킹.</b></td></tr>
+</table>
+
+<h3 class="sub">4-2. 다섯 덩어리 정리</h3>
+<table class="tbl">
+<tr><th>#</th><th>덩어리</th><th>실행 위치</th><th>맡은 일</th></tr>
+<tr><td>①</td><td>브라우저</td><td>형 PC</td><td>화면 그리기, 차트, 위젯 드래그, 웹소켓 수신</td></tr>
+<tr><td>②</td><td>PHP (Apache)</td><td>서버</td><td>페이지 생성, JSON API, 매매 로직, 관리자, cron</td></tr>
+<tr><td>③</td><td>Node stock-ws</td><td>서버 (상주)</td><td>KIS 웹소켓 유지, 브라우저 중계, 분봉 누적</td></tr>
+<tr><td>④</td><td>MySQL</td><td>원격 (공용)</td><td>모든 데이터의 단일 원본</td></tr>
+<tr><td>⑤</td><td>파이썬 팀</td><td>별도</td><td>퀀트 전략·백테스트 (같은 DB의 다른 테이블)</td></tr>
+</table>
+
+
+<!-- ============================================ -->
+<h2 class="sec" id="db"><span class="em">SECTION 5</span>데이터베이스 30개 테이블</h2>
+
+<p class="lead">우리가 쓰는 19개와, 같은 DB에 있지만 <b>파이썬 팀 것이라 건드리면 안 되는</b> 11개.</p>
+
+<h3 class="sub">5-1. 우리 테이블 19개 (5그룹)</h3>
+
+<h4 class="ssub">그룹 A — 사람과 돈 (5개)</h4>
+<table class="tbl">
+<tr><th>테이블</th><th>담는 것</th><th>기억할 점</th></tr>
+<tr><td><code>users</code></td><td>회원 (이메일·비번해시·닉네임·status)</td><td>비번은 <code>password_hash</code> 결과만. <code>status='suspended'</code>면 로그인 차단.</td></tr>
+<tr><td><code>accounts</code></td><td>유저별 현금 잔고</td><td>가입 시 1,000만원. 금액은 <code>app_settings.initial_cash</code>로 관리자가 바꿀 수 있음.</td></tr>
+<tr><td><code>holdings</code></td><td>보유 종목 (수량·평균단가)</td><td><b>전량 매도하면 행이 삭제됩니다</b> — 그래서 과거 평단은 여기서 못 구합니다(§8-5 참고).</td></tr>
+<tr><td><code>orders</code></td><td>주문 기록 (매수/매도 전부)</td><td><code>is_auto</code> 컬럼: 0=사람, 1=자동매매. 실제 거래내역의 원본.</td></tr>
+<tr><td><code>watchlist</code></td><td>관심 종목</td><td>실시간 구독 대상에 자동 포함됩니다(기본종목 ∪ 관심종목, 상한 40).</td></tr>
+</table>
+
+<h4 class="ssub">그룹 B — 시세 (6개) <span class="pill n">이 프로젝트의 핵심</span></h4>
+<table class="tbl">
+<tr><th>테이블</th><th>담는 것</th><th>크기·특징</th></tr>
+<tr><td><code>stock_master</code></td><td>종목코드 ↔ 종목명·시장</td><td>4,382행. 이름 붙이는 사전 역할.</td></tr>
+<tr><td><code>stock_latest</code></td><td>종목별 <b>현재가</b> (종목당 1행)</td><td>111행. 홈 화면·순위가 이걸 읽습니다. 1초 스로틀.</td></tr>
+<tr><td><code>stock_logs</code></td><td><b>원시 틱</b> — 체결 기록</td><td><b>294만 행 / 약 345MB</b>. 10초 스로틀. 인덱스가 데이터보다 큼.</td></tr>
+<tr><td><code>stock_candles_1m</code></td><td><b>1분봉</b></td><td>12만 행. 원본의 1/35 크기. 기본키 = (종목, 시각).</td></tr>
+<tr><td><code>stock_candles_1d</code></td><td><b>일봉</b></td><td>6.2만 행 / 129종목 / 2년치. 날짜 컬럼 이름이 <code>d</code>입니다(<code>trade_date</code> 아님).</td></tr>
+<tr><td><code>stock_views</code></td><td>종목별 조회수</td><td>"🔥 지금 많이 봐요" 목록의 원천.</td></tr>
+</table>
+
+<div class="note">
+<b>왜 시세 테이블이 3개(logs / 1m / 1d)나 되나</b><br>
+같은 데이터를 <b>정밀도와 크기를 맞바꿔</b> 세 벌 갖고 있는 것입니다.<br>
+· <code>stock_logs</code> = <b>원본 사진</b> — 가장 정확하지만 무겁고, 오래된 건 지웁니다.<br>
+· <code>stock_candles_1m</code> = <b>중간 크기</b> — 원본의 1/35. 최근 몇 달의 상세 차트용.<br>
+· <code>stock_candles_1d</code> = <b>썸네일</b> — 하루 1행. 몇 년치를 담아도 가볍습니다.<br>
+차트는 <b>기간에 따라 셋 중 알맞은 것을 골라</b> 읽습니다. (§8)
+</div>
+
+<h4 class="ssub">그룹 C — 커뮤니티·자동매매 (2개)</h4>
+<table class="tbl">
+<tr><th>테이블</th><th>담는 것</th><th>기억할 점</th></tr>
+<tr><td><code>stock_posts</code></td><td>종목별 게시글</td><td><code>ensurePostsTable()</code>이 없으면 자동 생성. 내용은 500자 제한.</td></tr>
+<tr><td><code>auto_trade_settings</code></td><td>유저별 자동매매 일시정지 상태</td><td>화면은 완성, 매매 로직은 아직. 로직이 붙으면 이 값을 읽고 멈춥니다.</td></tr>
+</table>
+
+<h4 class="ssub">그룹 D — 관리자 (3개)</h4>
+<table class="tbl">
+<tr><th>테이블</th><th>담는 것</th><th>기억할 점</th></tr>
+<tr><td><code>admins</code></td><td>관리자 계정 + <code>role</code></td><td>RBAC의 근거. 유저 세션과 <b>완전히 분리</b>됩니다.</td></tr>
+<tr><td><code>admin_cash_logs</code></td><td>관리자가 지급한 현금 이력</td><td>"누가 누구에게 얼마를" — 감사 추적(audit trail).</td></tr>
+<tr><td><code>notices</code></td><td>공지사항</td><td><code>is_active=1</code>인 것만 유저 화면 배너에 뜹니다.</td></tr>
+</table>
+
+<h4 class="ssub">그룹 E — 운영 (3개)</h4>
+<table class="tbl">
+<tr><th>테이블</th><th>담는 것</th><th>기억할 점</th></tr>
+<tr><td><code>app_settings</code></td><td>key-value 설정</td><td><code>initial_cash</code>, <code>maintenance_mode</code>, <code>maintenance_msg</code>. <b>코드 수정 없이 운영값을 바꾸는</b> 장치.</td></tr>
+<tr><td><code>access_logs</code></td><td>접속 IP·UA·행동</td><td>FDS(이상거래탐지)·CS 대응의 기초 데이터.</td></tr>
+<tr><td><code>error_logs</code></td><td>에러 수집</td><td>화면에는 안 보이는 실패를 남깁니다.</td></tr>
+</table>
+
+<h3 class="sub">5-2. 파이썬 팀 테이블 11개 — 건드리지 말 것</h3>
+<div class="bad">
+아래 테이블은 <b>같은 DB에 있지만 우리 코드가 만들지도, 읽지도 않습니다.</b>
+스키마를 바꾸거나 지우면 팀원 작업이 깨집니다. "우리 테이블이 아닌 게 있다"는 것만 알고 넘어가세요.
+</div>
+<table class="tbl">
+<tr><th>테이블</th><th>추정 용도</th></tr>
+<tr><td><code>alembic_version</code></td><td>파이썬 마이그레이션 도구(Alembic)의 버전 기록</td></tr>
+<tr><td><code>py_momentum_rank</code> · <code>py_index_prices</code></td><td>모멘텀 순위·지수 가격</td></tr>
+<tr><td><code>py_user_strategy_settings</code> · <code>py_user_kis_credentials</code></td><td>유저별 전략 설정·KIS 자격증명(암호화)</td></tr>
+<tr><td><code>strategies</code> · <code>backtest_runs</code> · <code>backtest_results</code> · <code>trades</code></td><td>전략 정의와 백테스트 실행·결과·체결</td></tr>
+<tr><td><code>price_history</code></td><td>파이썬 쪽 가격 이력 (우리 <code>stock_candles_1d</code>와 별개)</td></tr>
+<tr><td><code>live_orders</code></td><td>실주문 기록</td></tr>
+</table>
+
+
+<!-- ============================================ -->
+<h2 class="sec" id="files"><span class="em">SECTION 6</span>파일 지도</h2>
+
+<p class="lead">PHP 56개 + Node 8개. <b>어떤 일이 생기면 어느 파일을 열어야 하는지</b>를 아는 게 목적입니다.</p>
+
+<h3 class="sub">6-1. config/ — 설정과 외부연동 (7개)</h3>
+<table class="tbl">
+<tr><th>파일</th><th>줄</th><th>하는 일</th></tr>
+<tr><td><code>db.php</code></td><td>21</td><td>DB 연결 + <b>KST 타임존 고정</b>. 모든 PHP의 출발점.</td></tr>
+<tr><td><code>kis_config.php</code></td><td>5</td><td>KIS 앱키·시크릿·계좌번호. <b>절대 노출 금지</b>.</td></tr>
+<tr><td><code>kis_api.php</code></td><td>527</td><td>KIS 통신 전부 — 토큰·시세·호가·체결·수급·일봉·주문. 함수 15개.</td></tr>
+<tr><td><code>app.php</code></td><td>152</td><td>운영 공통층 — 설정·로깅·점검모드·공지 + <b>CSRF 방어</b>.</td></tr>
+<tr><td><code>default_stocks.php</code></td><td>52</td><td>기본 추적 종목 111개. <code>stock-ws/defaultStocks.js</code>와 <b>내용이 같아야</b> 합니다.</td></tr>
+<tr><td><code>ranked_stocks.php</code></td><td>36</td><td>순위로 자동 선정된 종목 (cron이 갱신).</td></tr>
+<tr><td><code>.htaccess</code></td><td>22</td><td>이 폴더 <b>웹 접근 전면 차단</b>.</td></tr>
+</table>
+
+<h3 class="sub">6-2. user/ — 사용자 화면과 API (33개)</h3>
+
+<h4 class="ssub">화면 (7개)</h4>
+<table class="tbl">
+<tr><th>파일</th><th>줄</th><th>하는 일</th></tr>
+<tr><td><code>index.php</code></td><td>253</td><td>홈 대시보드. 순위 4탭(거래대금·거래량·급상승·급하락) + 우측 "많이 봐요". <b>비로그인 공개</b>.</td></tr>
+<tr><td><code>stock_detail.php</code></td><td>640</td><td>종목 상세. 차트·기간탭·호가·체결·수급·주문패널·커뮤니티. <b>가장 큰 화면 파일</b>.</td></tr>
+<tr><td><code>auto_trade.php</code></td><td>542</td><td>자동매매 화면 (도넛 포트폴리오·거래내역·일시정지). 로직은 아직 없음.</td></tr>
+<tr><td><code>trade.php</code></td><td>251</td><td>주문 화면.</td></tr>
+<tr><td><code>login.php</code> · <code>join.php</code></td><td>51 · 49</td><td>로그인·회원가입 폼.</td></tr>
+<tr><td><code>includes/header.php</code></td><td>96</td><td>공통 네비게이션 + 점검모드·공지 배너.</td></tr>
+</table>
+
+<h4 class="ssub">로직 (1개 — 가장 중요)</h4>
+<table class="tbl">
+<tr><th>파일</th><th>줄</th><th>하는 일</th></tr>
+<tr><td><code>func.php</code></td><td><b>988</b></td><td>사용자 쪽 로직 전부. <b>함수 41개</b>. 세션·관심종목·순위·<b>매수/매도 트랜잭션</b>·<b>차트 캔들</b>·커뮤니티·자동매매.</td></tr>
+</table>
+
+<h4 class="ssub">처리기 (POST 받는 것, 8개)</h4>
+<p><code>join_process.php</code> · <code>login_process.php</code> · <code>logout.php</code> · <code>trade_process.php</code> · <code>post_add.php</code> · <code>watchlist_add.php</code> · <code>watchlist_remove.php</code> · <code>auto_trade_toggle.php</code>
+— 전부 <b>CSRF 검사</b>를 거칩니다.</p>
+
+<h4 class="ssub">데이터 창구 (JSON API, 11개)</h4>
+<table class="tbl">
+<tr><th>파일</th><th>주는 것</th><th>로그인</th></tr>
+<tr><td><code>get_stock_chart.php</code></td><td>차트 캔들 (기간별)</td><td>불필요 (공개)</td></tr>
+<tr><td><code>get_market.php</code></td><td>홈 순위 목록</td><td>불필요</td></tr>
+<tr><td><code>get_quote.php</code></td><td>종목 지표 (52주 고저·PER 등)</td><td>불필요</td></tr>
+<tr><td><code>get_orderbook.php</code></td><td>호가 10단계</td><td>불필요</td></tr>
+<tr><td><code>get_ccnl.php</code></td><td>체결 내역 + 체결강도</td><td>불필요</td></tr>
+<tr><td><code>get_investor.php</code></td><td>수급 (개인·외국인·기관)</td><td>불필요</td></tr>
+<tr><td><code>get_prices.php</code> · <code>get_most_viewed.php</code> · <code>get_posts.php</code></td><td>가격·조회수·게시글</td><td>불필요</td></tr>
+<tr><td><code>get_auto_trades.php</code></td><td>자동매매 거래내역</td><td><b>필요</b></td></tr>
+<tr><td><code>watchlist_search.php</code> · <code>stock_csv.php</code></td><td>종목 검색·CSV 내보내기</td><td>일부 필요</td></tr>
+</table>
+
+<h3 class="sub">6-3. admin/ — 관리자 (12개)</h3>
+<table class="tbl">
+<tr><th>파일</th><th>줄</th><th>하는 일</th></tr>
+<tr><td><code>func.php</code></td><td>698</td><td>관리자 로직 + <b>RBAC(<code>adminCan</code>)</b> + 통계(거래대금·매수매도비율·시간대별·리더보드).</td></tr>
+<tr><td><code>index.php</code></td><td>374</td><td>대시보드 (가입자·주문·거래량·차트).</td></tr>
+<tr><td><code>settings.php</code></td><td>213</td><td>초기자금·점검모드·공지 관리.</td></tr>
+<tr><td><code>users.php</code> · <code>user_detail.php</code> · <code>user_action.php</code></td><td>105·182·53</td><td>회원 목록·상세·정지/현금지급.</td></tr>
+<tr><td><code>admins.php</code></td><td>138</td><td>관리자 계정·역할 관리.</td></tr>
+<tr><td><code>login.php</code> · <code>login_process.php</code> · <code>logout.php</code></td><td>33·22·9</td><td><b>유저와 완전 분리된</b> 관리자 인증.</td></tr>
+</table>
+
+<h3 class="sub">6-4. cron/ — 자동화 (8개)</h3>
+<table class="tbl">
+<tr><th>파일</th><th>줄</th><th>언제 돌려야 하나</th><th>하는 일</th></tr>
+<tr><td><code>fetch_price.php</code></td><td>33</td><td>장중 주기적</td><td>실시간 구독에서 빠진 종목을 REST로 보충 수집.</td></tr>
+<tr><td><code>update_rankings.php</code></td><td>57</td><td>장중 주기적</td><td>거래대금 순위로 추적 종목 갱신.</td></tr>
+<tr><td><code>aggregate_candles.php</code></td><td>93</td><td><b>5분마다</b></td><td><code>stock_logs</code>→1분봉 <b>보수 집계</b>. 이미 있는 분은 안 건드림.</td></tr>
+<tr><td><code>backfill_daily.php</code></td><td>125</td><td><b>하루 1회 (장마감 후)</b></td><td>KIS 일봉 백필. <b>안 돌리면 차트 날짜가 매일 하루씩 밀립니다.</b></td></tr>
+<tr><td><code>purge_logs.php</code></td><td>109</td><td>하루 1회</td><td>오래된 원시 틱 정리. 분봉 커버리지 90% 미만이면 <b>건너뜀</b>.</td></tr>
+<tr><td><code>import_stock_master.php</code></td><td>75</td><td>가끔</td><td>종목 마스터 갱신.</td></tr>
+<tr><td><code>migrate.php</code></td><td>34</td><td>수동</td><td><b class="toup">⚠️ MariaDB 전용 문법이 섞여 있어 MySQL 8.4에선 에러</b>. 브라우저로 열지 말 것.</td></tr>
+<tr><td><code>backfill_to_shared.php</code></td><td>206</td><td>1회성</td><td>로컬 DB → 원격 공용 DB 이관용.</td></tr>
+</table>
+
+<h3 class="sub">6-5. stock-ws/ — Node 실시간 서버 (8개)</h3>
+<table class="tbl">
+<tr><th>파일</th><th>줄</th><th>하는 일</th></tr>
+<tr><td><code>index.js</code></td><td>444</td><td>본체. KIS 웹소켓 접속·재접속, 종목 동적 구독(refcount), 체결/호가 처리, 스로틀, 분봉 flush, 워치독, graceful shutdown.</td></tr>
+<tr><td><code>candles.js</code></td><td>99</td><td><b>1분봉 누적기</b>. 순수 함수 3개(<code>minuteKeyKst</code>·<code>accumulateCandle</code>·<code>flushCandles</code>)라 테스트가 쉽습니다.</td></tr>
+<tr><td><code>db.js</code></td><td>97</td><td>DB 풀 + KST 고정 + <code>saveCandles</code>(배치 upsert) + 구독 종목 조회.</td></tr>
+<tr><td><code>defaultStocks.js</code></td><td>27</td><td>기본 종목. <code>config/default_stocks.php</code>와 <b>같아야</b> 합니다.</td></tr>
+<tr><td><code>getApprovalKey.js</code> · <code>logger.js</code></td><td>15 · 18</td><td>웹소켓 접속키 발급 · 로그 기록.</td></tr>
+<tr><td><code>test_candles.js</code></td><td>124</td><td><b>분봉 회귀 테스트 39개</b> (타임존·OHLC·이상치·델타중복·메모리·부하).</td></tr>
+<tr><td><code>test_logic.js</code></td><td>152</td><td>기타 로직 테스트.</td></tr>
+<tr><td><code>.htaccess</code></td><td>11</td><td>웹 접근 전면 차단 (<code>.env</code>가 열려 있었음).</td></tr>
+</table>
+
+<h3 class="sub">6-6. docs/ — 이 노트의 빌더 <span class="pill n">신설</span></h3>
+<table class="tbl">
+<tr><th>파일</th><th>하는 일</th></tr>
+<tr><td><code>build_note.php</code></td><td>템플릿의 <code>&lt;!--CODE:...--&gt;</code> 자리에 <b>실제 파일을 읽어</b> 줄번호를 붙여 넣습니다. + <b>시크릿 자동 마스킹</b>.</td></tr>
+<tr><td><code>note1_template.html</code> · <code>note2_template.html</code></td><td>1편·2편의 원본. <b>노트를 고치려면 여기를 고치고 다시 빌드</b>합니다.</td></tr>
+</table>
+
+<div class="good">
+<b>노트 다시 만드는 법</b> (코드가 바뀌었을 때)<br>
+<code>php docs/build_note.php docs/note2_template.html "C:\Users\M\Desktop\모아증권_코드해석편.html"</code><br>
+빌더가 코드를 파일에서 새로 읽어오므로 <b>노트가 저절로 최신이 됩니다.</b>
+</div>
+
+
+<!-- ============================================ -->
+<h2 class="sec" id="flow"><span class="em">SECTION 7</span>데이터가 흐르는 4가지 길</h2>
+
+<h3 class="sub">길 ① 실시간 (WebSocket) — 가장 빠른 길</h3>
+<div class="diagram">KIS 웹소켓 ──체결──▶ stock-ws/index.js
+                          │
+                          ├─① 즉시 브라우저로 broadcast   ← DB를 기다리지 않는다
+                          │
+                          ├─② accumulateCandle()  (메모리, 모든 체결)
+                          │        └─ 10초마다 ─▶ stock_candles_1m  (한 방 배치)
+                          │
+                          ├─③ 10초 스로틀 ─▶ stock_logs
+                          └─④  1초 스로틀 ─▶ stock_latest</div>
+<p><b>왜 ①이 맨 앞인가:</b> DB 저장을 <code>await</code>한 뒤에 화면으로 쏘면, 원격 DB가 느려질 때 <b>화면 실시간까지 같이 멎습니다.</b> 화면은 DB와 무관하게 항상 즉시 흘러야 합니다.</p>
+<p><b>왜 ②가 스로틀 앞인가:</b> 고가·저가는 <b>모든 체결</b>을 봐야 정확합니다. 스로틀 뒤에 두면 10초에 1건만 보게 되어 봉이 밋밋해집니다. 메모리 연산이라 DB 부하는 0입니다.</p>
+
+<h3 class="sub">길 ② 요청형 (REST)</h3>
+<div class="diagram">브라우저 ──fetch()──▶ user/get_*.php ──▶ config/kis_api.php ──▶ KIS REST API
+                                   └──▶ DB (stock_latest 등)</div>
+<p>실시간 구독은 <b>40종목이 상한</b>(KIS 세션 제한)이라, 나머지 종목과 호가·수급·체결내역 같은 부가 정보는 REST로 가져옵니다.
+장 마감 후에도 화면이 비지 않도록 <b>REST 초기 로드 + WS 실시간 갱신</b>의 2단 구조를 씁니다.</p>
+
+<h3 class="sub">길 ③ 주기 실행 (cron)</h3>
+<table class="tbl">
+<tr><th>주기</th><th>스크립트</th><th>없으면 생기는 일</th></tr>
+<tr><td>장중 주기</td><td><code>fetch_price.php</code></td><td>구독 밖 종목의 가격이 안 갱신됨</td></tr>
+<tr><td>장중 주기</td><td><code>update_rankings.php</code></td><td>추적 종목이 고정됨</td></tr>
+<tr><td>5분</td><td><code>aggregate_candles.php</code></td><td>수집기가 꺼져 있던 구간의 분봉에 구멍</td></tr>
+<tr><td><b>하루 1회</b></td><td><code>backfill_daily.php</code></td><td><b>차트 날짜가 매일 하루씩 밀립니다</b></td></tr>
+<tr><td>하루 1회</td><td><code>purge_logs.php</code></td><td><code>stock_logs</code>가 무한 증가</td></tr>
+</table>
+
+<h3 class="sub">길 ④ 캔들 파이프라인 — 다음 섹션에서 자세히</h3>
+
+
+<!-- ============================================ -->
+<h2 class="sec" id="candle"><span class="em">SECTION 8</span>캔들 파이프라인 심화</h2>
+
+<p class="lead">이 프로젝트에서 <b>가장 많이 고민하고 가장 많이 틀렸던</b> 부분입니다. 면접에서 얘기할 거리도 여기 제일 많습니다.</p>
+
+<h3 class="sub">8-1. 문제: 차트가 매일 아침 9시에 새로 시작했다</h3>
+<div class="bad">
+<b>증상</b> — "차트가 오늘 9시부터만 그려져 있다. 실제 차트는 쭉 이어져 있는데."<br>
+<b>진범</b> — <code>getCandleData()</code>의 한 줄: <code>WHERE stock_code=? AND DATE(created_at)=CURDATE()</code><br>
+<b>오늘치만</b> 조회하고 있었습니다. 그래서 매일 아침 차트가 리셋됐습니다.
+</div>
+
+<h3 class="sub">8-2. 해결: 3단 저장 + 기간별 해상도</h3>
+<div class="diagram">                     원본                중간              썸네일
+                  ┌──────────┐     ┌──────────────┐   ┌──────────────┐
+   KIS 실시간 ───▶ │stock_logs│ ──▶ │candles_1m    │   │candles_1d    │ ◀── KIS 일봉 API
+                  │ 틱 원본   │     │ 1분봉         │   │ 일봉          │      (백필)
+                  │ 294만행   │     │ 12만행        │   │ 6.2만행       │
+                  │ 345MB    │     │ 원본의 1/35   │   │ 하루 1행      │
+                  │ 7일 보존  │     │ 몇 달 보존     │   │ 몇 년 보존     │
+                  └──────────┘     └──────────────┘   └──────────────┘
+                        ▲                  ▲                  ▲
+                        └──────────┬───────┴──────────┬───────┘
+                                   │                  │
+                            1일·1주 탭이 읽음      1개월 이상 탭이 읽음</div>
+
+<table class="tbl">
+<tr><th>탭</th><th>해상도</th><th>읽는 곳</th><th>캔들 수 (005930 실측)</th></tr>
+<tr><td>1일</td><td>1분봉</td><td>1m + logs 보강</td><td>약 26~390개</td></tr>
+<tr><td>1주</td><td>5분봉</td><td>1m + logs 보강</td><td>384개</td></tr>
+<tr><td>1개월</td><td><b>일봉</b></td><td>1d</td><td>23개</td></tr>
+<tr><td>3개월</td><td>일봉</td><td>1d</td><td>64개</td></tr>
+<tr><td>1년</td><td>일봉</td><td>1d</td><td>245개</td></tr>
+<tr><td>2년</td><td>일봉</td><td>1d</td><td>487개</td></tr>
+</table>
+
+<div class="note">
+<b>핵심</b> — 어느 탭을 눌러도 캔들이 <b>수백 개</b>입니다. 그래서 "2년 보기"가 "오늘 보기"보다 무겁지 않습니다.
+만약 1분봉으로 1년을 그렸다면 캔들 9만 개 · JSON 수 MB · 브라우저 정지였을 겁니다.
+</div>
+
+<h3 class="sub">8-3. 자가 치유 — 수집기가 죽어 있어도 구멍이 안 난다</h3>
+<p>분/시간봉은 <b>두 곳에서 읽어 이어 붙입니다</b>:</p>
+<ol class="flow">
+<li><code>stock_candles_1m</code>에서 읽어 버킷 단위로 묶습니다 (빠름).</li>
+<li>그 분봉이 <b>어디까지 있는지</b> 확인하고, <b>그 뒤 구간만</b> <code>stock_logs</code>로 즉석 집계해 보강합니다.</li>
+<li>경계를 <code>&gt;</code>(초과)로 잡아 <b>중복 캔들이 0</b>이 되게 합니다.</li>
+</ol>
+<p>덕분에 수집기를 며칠 꺼놨어도 차트는 이어져 보입니다. 다만 즉석 집계 구간이 길어질수록 느려집니다 —
+실제로 분봉이 하루 멈춰 있을 때 1주 탭이 <b>4.3초</b>까지 느려졌다가, 정상 상태에서는 <b>46ms</b>였습니다.
+<b>차트가 갑자기 느려지면 "수집기가 죽었나?"를 먼저 의심</b>하면 됩니다.</p>
+
+<h3 class="sub">8-4. 역할 분담 — 왜 분봉을 만드는 곳이 둘인가</h3>
+<table class="tbl">
+<tr><th></th><th>수집기 (candles.js)</th><th>보수 cron (aggregate_candles.php)</th></tr>
+<tr><td>언제</td><td>실시간, 항상</td><td>5분마다, 뒤늦게</td></tr>
+<tr><td>원천</td><td><b>모든 체결</b> (메모리)</td><td><code>stock_logs</code> (10초에 1건)</td></tr>
+<tr><td>정확도</td><td><b>높음</b> — 고가·저가가 원본 그대로</td><td>낮음 — 10초 사이 값이 빠짐</td></tr>
+<tr><td>거래량</td><td>건별 체결량을 더함 (정확)</td><td><code>MAX(volume)-MIN(volume)</code> (근사)</td></tr>
+<tr><td>충돌 시</td><td><b>이김</b></td><td><code>INSERT IGNORE</code> — 이미 있으면 <b>안 건드림</b></td></tr>
+</table>
+<div class="good">
+<b>이 한 줄이 설계의 핵심입니다.</b> 보수 경로가 <code>INSERT IGNORE</code>인 덕분에,
+cron을 아무리 자주 돌려도 수집기가 만든 정밀한 분봉을 절대 망가뜨리지 않습니다. 역할이 겹치지 않게 <b>우선순위를 데이터베이스 문법으로 못박은</b> 것입니다.
+</div>
+
+<h3 class="sub">8-5. 델타(delta)가 필요한 이유</h3>
+<p>진행 중인 1분은 10초마다 <b>여러 번</b> DB에 씁니다. 그때 거래량을 "총합"으로 보내면:</p>
+<div class="diagram">[잘못된 방식 — 총합을 보냄]
+  10:00:10  총합 100 저장 → DB: 100
+  10:00:20  총합 250 저장 → DB: 100 + 250 = 350   ← 틀림! (실제는 250)
+  10:00:30  총합 400 저장 → DB: 350 + 400 = 750   ← 더 틀림
+
+[올바른 방식 — 늘어난 몫(델타)만 보냄]
+  10:00:10  델타 100 저장 → DB: 100        내보낸 뒤 0으로 리셋
+  10:00:20  델타 150 저장 → DB: 100+150=250  ✅
+  10:00:30  델타 150 저장 → DB: 250+150=400  ✅</div>
+
+<h3 class="sub">8-6. 컬럼마다 갱신 규칙이 다른 이유</h3>
+<p>같은 분을 여러 번 쓰기 때문에, <code>ON DUPLICATE KEY UPDATE</code>가 컬럼마다 다릅니다.</p>
+<table class="tbl">
+<tr><th>컬럼</th><th>규칙</th><th>왜</th></tr>
+<tr><td><code>open_p</code></td><td><b>갱신 안 함</b></td><td>그 분의 <b>첫</b> 체결가여야 하므로 처음 값이 이겨야 함</td></tr>
+<tr><td><code>high_p</code></td><td><code>GREATEST</code></td><td>나눠 써도 최고가가 유지됨</td></tr>
+<tr><td><code>low_p</code></td><td><code>LEAST</code></td><td>나눠 써도 최저가가 유지됨</td></tr>
+<tr><td><code>close_p</code></td><td><b>덮어씀</b></td><td>마지막에 쓴 값이 곧 그 분의 마지막 체결가</td></tr>
+<tr><td><code>volume</code>·<code>trade_value</code></td><td><code>GREATEST</code></td><td>누적치라 되돌아가면 안 됨</td></tr>
+<tr><td><code>vol_delta</code>·<code>ticks</code></td><td><b>더하기</b></td><td>델타만 보내므로 중복 가산이 없음</td></tr>
+</table>
+
+<h3 class="sub">8-7. 타임존 — 9시간이 조용히 갉아먹은 것들</h3>
+<div class="bad">
+<b>실제로 터진 버그</b>: 실시간 차트 갱신이 <b>조용히 안 먹고 있었습니다.</b><br>
+서버가 주는 캔들 시간축은 "KST 벽시계를 UTC로 읽은 값"인데, 웹소켓의 <code>created_at</code>은 <b>진짜 UTC</b>(<code>toISOString()</code>)였습니다.
+두 값이 정확히 9시간 어긋나서, 새 캔들이 <code>slot &gt; last.time</code> 조건에 걸려 <b>전부 버려졌습니다</b>. 에러도 안 나고요.<br>
+→ 해결: 실시간 시각에 <code>KST_OFFSET = 9*3600</code>을 더해 축을 맞춤.
+</div>
+<p>타임존 규칙 3가지 (이것만 지키면 이 계열 버그가 안 납니다):</p>
+<ol class="flow">
+<li>날짜·구간 계산은 <b>PHP <code>date()</code>가 아니라 DB <code>NOW()</code>/<code>CURDATE()</code></b>로.</li>
+<li>DB 커넥션마다 <code>SET time_zone='+09:00'</code>. (PHP는 <code>db.php</code>, Node는 <code>db.js</code>)</li>
+<li>Node에서 KST를 만들 땐 로컬 시간대에 의존하지 말고 <b>UTC에 9시간을 직접 더한 뒤 <code>getUTC*()</code></b>로 읽기.</li>
+</ol>
+
+<!-- ============================================ -->
+<h2 class="sec" id="security"><span class="em">SECTION 9</span>보안 설계 — 16가지 방어</h2>
+
+<p class="lead">"어디를 어떻게 막았는가"를 방어별로. 면접에서 자주 묻는 부분입니다.</p>
+
+<table class="tbl">
+<tr><th>#</th><th>막는 공격</th><th>방법</th><th>어디에</th></tr>
+<tr><td>1</td><td>SQL 인젝션</td><td>prepared statement + bind_param</td><td>거의 모든 쿼리</td></tr>
+<tr><td>2</td><td>XSS (서버)</td><td><code>htmlspecialchars()</code>로 출력 이스케이프</td><td>PHP 출력 전반</td></tr>
+<tr><td>3</td><td>XSS (브라우저)</td><td>JS <code>esc()</code> 헬퍼로 <code>&amp; &lt; &gt; "</code> 치환</td><td><code>stock_detail.php</code> 커뮤니티</td></tr>
+<tr><td>4</td><td>CSRF</td><td>세션 난수 토큰 + <code>hash_equals()</code> 비교</td><td><code>config/app.php</code>, 모든 POST</td></tr>
+<tr><td>5</td><td>비밀번호 유출</td><td><code>password_hash</code> / <code>password_verify</code></td><td>가입·로그인</td></tr>
+<tr><td>6</td><td>세션 혼용</td><td>세션 이름 분리 (<code>USER_SESSION</code> / <code>ADMIN_SESSION</code>)</td><td><code>startUserSession</code> / <code>startAdminSession</code></td></tr>
+<tr><td>7</td><td>권한 상승</td><td>RBAC — <code>adminCan()</code> / <code>requireAdminCan()</code></td><td><code>admin/func.php</code></td></tr>
+<tr><td>8</td><td>URL 직접 접근</td><td>서버측 게이트 <code>requireUserLogin()</code></td><td>로그인 필요 페이지</td></tr>
+<tr><td>9</td><td>오픈 리다이렉트</td><td><code>safeNext()</code> — <b>같은 폴더 .php 파일명만</b> 통과</td><td>로그인 후 복귀</td></tr>
+<tr><td>10</td><td>설정파일 노출</td><td><code>.htaccess</code>로 폴더 전면 차단</td><td><code>config/</code>, <code>stock-ws/</code></td></tr>
+<tr><td>11</td><td>잘못된 입력</td><td>종목코드 정규식 <code>^[0-9A-Z]{6}$</code> 검증</td><td><code>get_stock_chart.php</code> 등</td></tr>
+<tr><td>12</td><td>음수 수량 악용</td><td>수량·가격 <b>2차 검증</b> (데이터 계층에서 다시)</td><td><code>processBuy</code> / <code>processSell</code></td></tr>
+<tr><td>13</td><td>동시 요청 경합</td><td><code>FOR UPDATE</code> 행 잠금 + 트랜잭션</td><td>매수·매도</td></tr>
+<tr><td>14</td><td>정지 계정 로그인</td><td><code>status='suspended'</code> 차단</td><td><code>login_process.php</code></td></tr>
+<tr><td>15</td><td>이상거래 추적</td><td>접속 IP·UA 로깅 (<code>access_logs</code>)</td><td><code>logAccess()</code></td></tr>
+<tr><td>16</td><td><b>문서에 시크릿 박제</b> <span class="pill n">신설</span></td><td>노트 빌드 시 <b>자동 마스킹 + 최종 유출 검사</b></td><td><code>docs/build_note.php</code></td></tr>
+</table>
+
+<div class="warn-box">
+<b>아직 남은 위험</b><br>
+· <code>stock-ws/.env</code>가 한동안 웹에서 200으로 열려 있었습니다. 이 PC를 외부에 노출한 적이 있다면 <b>DB 비밀번호와 KIS 시크릿을 교체</b>하는 게 안전합니다.<br>
+· <code>config/db.php</code>·<code>kis_config.php</code>에 시크릿이 <b>평문</b>으로 있습니다. 지금은 <code>.htaccess</code>로 막고 있지만, 실서비스라면 환경변수로 빼는 게 정석입니다.
+</div>
+
+
+<!-- ============================================ -->
+<h2 class="sec" id="scenario"><span class="em">SECTION 10</span>실전 시나리오 6개</h2>
+
+<h3 class="sub">시나리오 1 — 회원가입하고 1,000만원 받기</h3>
+<ol class="flow">
+<li><code>join.php</code>가 폼을 보여줍니다. <b>CSRF 토큰</b>이 hidden으로 심어집니다.</li>
+<li>제출 → <code>join_process.php</code>가 <code>requireCsrf()</code>로 토큰을 확인합니다.</li>
+<li><code>emailExists()</code>로 중복 확인 → <code>createUser()</code>가 <code>password_hash</code>한 비번으로 <code>users</code>에 INSERT.</li>
+<li><code>createAccount()</code>가 <code>app_settings.initial_cash</code>(기본 1,000만원)를 읽어 <code>accounts</code>에 INSERT.</li>
+<li>로그인 페이지로 리다이렉트.</li>
+</ol>
+<p class="lead">포인트: 초기 자금이 <b>코드에 박혀 있지 않고 설정 테이블</b>에 있어서, 관리자가 화면에서 바꿀 수 있습니다.</p>
+
+<h3 class="sub">시나리오 2 — 삼성전자 10주 매수</h3>
+<ol class="flow">
+<li>브라우저가 <code>trade_process.php</code>로 POST (종목·수량).</li>
+<li>CSRF 확인 → 로그인 확인 → <b>가격은 클라이언트 값을 안 믿고 서버가 <code>stock_latest</code>에서 다시 읽습니다.</b></li>
+<li><code>processBuy()</code> 진입 → <code>begin_transaction()</code>.</li>
+<li><code>SELECT ... FOR UPDATE</code>로 <b>내 잔고 행을 잠급니다</b> (동시 매수 방지).</li>
+<li>잔액 부족이면 <code>throw</code> → <code>catch</code>에서 <code>rollback()</code> → <b>아무 일도 안 일어남</b>.</li>
+<li>충분하면: 잔고 차감 → 보유종목 upsert(<b>평균단가 재계산</b>) → <code>orders</code>에 기록 → <code>commit()</code>.</li>
+</ol>
+<div class="note"><b>평균단가 공식</b>: <code>(기존수량×기존평단 + 신규수량×신규가) ÷ 총수량</code>. 이걸 틀리면 수익률이 전부 틀어집니다.</div>
+
+<h3 class="sub">시나리오 3 — 종목 상세 페이지 열기</h3>
+<ol class="flow">
+<li><code>stock_detail.php</code>가 서버에서 실행 → <code>recordStockView()</code>로 조회수 +1.</li>
+<li>HTML을 받아 브라우저가 그림. <b>이 시점부터 JS</b>.</li>
+<li>JS가 <code>get_quote</code>·<code>get_orderbook</code>·<code>get_ccnl</code>·<code>get_investor</code>·<code>get_stock_chart</code>를 <b>REST로 초기 로드</b> (장 마감에도 화면이 안 빔).</li>
+<li>웹소켓 연결 → <code>{action:'watch', code}</code>를 보내 <b>그 종목만 구독 추가</b>.</li>
+<li>체결이 올 때마다 가격·체결내역·호가·<b>마지막 캔들</b>이 갱신됩니다.</li>
+<li>페이지를 떠나면 <code>unwatch</code> → refcount가 0이면 KIS 구독 해제 (41건 제한 대응).</li>
+</ol>
+
+<h3 class="sub">시나리오 4 — 차트에서 "1년" 탭 누르기</h3>
+<ol class="flow">
+<li>버튼 클릭 → <b>이벤트 위임</b>으로 <code>loadChart('1Y')</code> 호출.</li>
+<li><code>loadSeq</code> 증가 — <b>연타 가드</b>. 늦게 온 응답이 최신 화면을 덮지 않게 합니다.</li>
+<li><code>fetch('get_stock_chart.php?...&amp;range=1Y')</code>.</li>
+<li>서버: <code>chartRangeSpec('1Y')</code> → <code>{src:'daily', days:366}</code> → <code>getDailyCandles()</code>가 <code>stock_candles_1d</code>를 읽음.</li>
+<li>응답의 <code>time</code>이 <code>'2026-08-07'</code> 같은 <b>문자열</b> → 차트가 business day로 해석해 주말을 건너뜀.</li>
+<li>일봉이므로 <code>timeVisible:false</code>(시:분 축 끔) + <b>실시간 갱신 안 함</b>(<code>RANGE_BUCKET</code>에 항목 없음).</li>
+</ol>
+
+<h3 class="sub">시나리오 5 — 수집기를 껐다 켜기</h3>
+<ol class="flow">
+<li>Ctrl+C → <code>SIGINT</code> → <code>gracefulExit()</code>가 <b>메모리에 있던 분봉을 마지막으로 저장</b>하고 종료. (안 하면 마지막 1분이 통째로 사라집니다)</li>
+<li>다시 켜면 웹소켓 재접속 → 접속키 발급 → 구독 등록.</li>
+<li>꺼져 있던 구간의 분봉은? <code>aggregate_candles.php</code>가 <code>stock_logs</code>로 <b>뒤늦게 메웁니다</b>(<code>INSERT IGNORE</code>).</li>
+<li>그것도 안 돌았다면? 차트를 열 때 <b>자가 치유</b>가 즉석 집계로 메웁니다(느리지만 구멍은 없음).</li>
+</ol>
+
+<h3 class="sub">시나리오 6 — 관리자가 회원을 정지시키기</h3>
+<ol class="flow">
+<li><code>admin/login.php</code> → <b><code>ADMIN_SESSION</code></b>으로 로그인 (유저 세션과 별개).</li>
+<li><code>users.php</code>에서 대상 선택 → <code>user_action.php</code>로 POST.</li>
+<li><code>requireAdminCan('user_suspend')</code> — <b>역할에 권한이 없으면 여기서 차단</b>. 화면에서 버튼을 숨기는 것만으론 부족하고, <b>서버에서 다시 확인</b>하는 게 핵심입니다.</li>
+<li><code>users.status='suspended'</code> 갱신.</li>
+<li>그 유저가 로그인 시도 → <code>login_process.php</code>가 status를 보고 차단.</li>
+</ol>
+
+
+<!-- ============================================ -->
+<h2 class="sec" id="trouble"><span class="em">SECTION 11</span>트러블슈팅 사례집 — 실제로 터진 13건</h2>
+
+<p class="lead">면접에서 "어려웠던 점"을 물으면 여기서 고르면 됩니다. <b>증상 → 원인 → 해결 → 배운 것</b> 순서로 정리했습니다.</p>
+
+<div class="file">
+<div class="fn">사례 1. 코스닥 종목만 저장이 안 됐다</div>
+<p><b>증상</b>: 111종목을 수집하는데 20개만 저장됨.<br>
+<b>원인</b>: 종목명이 없을 때 쓰려던 폴백 값을 <b>변수에만 넣고 실제 저장에는 안 반영</b>했습니다. → <code>Column 'stock_name' cannot be null</code><br>
+<b>배운 것</b>: "값을 준비했다"와 "값을 썼다"는 다릅니다. <b>111개 전부 성공</b>을 확인하기 전엔 고쳤다고 말하면 안 됩니다.</p>
+</div>
+
+<div class="file">
+<div class="fn">사례 2. 거래대금 순위가 토스와 달랐다</div>
+<p><b>증상</b>: 홈 순위가 실제 증권사와 다름.<br>
+<b>원인</b>: 거래대금을 <code>가격 × 거래량</code>으로 <b>근사</b>했습니다. 실제 거래대금은 체결가가 계속 달라서 그렇게 계산되지 않습니다.<br>
+<b>해결</b>: KIS가 주는 <b>진짜 누적거래대금</b>(<code>acml_tr_pbmn</code>)을 받아 <code>trade_value</code> 컬럼에 저장하고 그걸로 정렬.<br>
+<b>배운 것</b>: 계산할 수 있어 보여도 <b>원천이 주는 값이 있으면 그걸 쓰는 게 정확</b>합니다.</p>
+</div>
+
+<div class="file">
+<div class="fn">사례 3. migrate.php가 MySQL에서 에러</div>
+<p><b>원인</b>: <code>ADD COLUMN IF NOT EXISTS</code>는 <b>MariaDB 전용 문법</b>인데 우리는 MySQL 8.4.<br>
+<b>해결</b>: <code>information_schema.COLUMNS</code>로 컬럼 존재를 먼저 확인한 뒤 ALTER. (<code>ensureAutoTradeSchema</code>가 그 방식)<br>
+<b>배운 것</b>: "MySQL 계열"이라고 문법이 같지 않습니다.</p>
+</div>
+
+<div class="file">
+<div class="fn">사례 4. 음수 수량으로 매도하면 잔고가 늘어났다</div>
+<p><b>원인</b>: 화면에서만 검증하고 <b>서버 로직에서 안 했습니다</b>. 음수 매도는 보유수량을 늘리고 현금을 깎는 역버그가 됩니다.<br>
+<b>해결</b>: <code>processBuy</code>/<code>processSell</code> 진입부에서 수량·가격을 <b>다시</b> 검증.<br>
+<b>배운 것</b>: <b>브라우저에서 오는 값은 전부 조작 가능</b>합니다. 검증은 서버가 최종 책임입니다.</p>
+</div>
+
+<div class="file">
+<div class="fn">사례 5. 앱키 중복 발급으로 토큰 제한에 걸림</div>
+<p><b>원인</b>: 요청마다 새 토큰을 발급받았습니다.<br>
+<b>해결</b>: <code>token_cache.json</code>에 23시간 캐싱 (실제 만료 24시간보다 여유 있게).<br>
+<b>배운 것</b>: 외부 API는 <b>호출 횟수 자체가 자원</b>입니다.</p>
+</div>
+
+<div class="file">
+<div class="fn">사례 6. 포트 충돌로 수집기가 안 떴다</div>
+<p><b>해결</b>: <code>netstat -ano</code>로 점유 프로세스를 찾아 종료.<br>
+<b>배운 것</b>: "안 켜진다"의 상당수는 <b>이미 켜져 있는 것</b>입니다.</p>
+</div>
+
+<div class="file">
+<div class="fn">사례 7. 차트가 매일 아침 9시에 리셋됐다 <span class="pill n">차트 개편의 발단</span></div>
+<p><b>원인</b>: <code>WHERE DATE(created_at)=CURDATE()</code> — <b>오늘치만</b> 조회.<br>
+<b>해결</b>: 기간 파라미터 도입 + 3단 저장 구조 (§8).<br>
+<b>배운 것</b>: 한 줄짜리 조건이 <b>기능 전체의 한계</b>를 정할 수 있습니다.</p>
+</div>
+
+<div class="file">
+<div class="fn">사례 8. 30분봉의 시가·종가가 조용히 틀렸다 <span class="pill n">가장 위험했던 버그</span></div>
+<p><b>원인</b>: <code>GROUP_CONCAT</code>의 기본 길이 제한 <b>1024바이트</b>. 30분 버킷은 값이 그보다 많아 <b>잘렸고</b>, MySQL은 <b>경고도 안 냈습니다</b>.<br>
+<b>해결</b>: <code>SET SESSION group_concat_max_len = 1048576</code>.<br>
+<b>배운 것</b>: <b>에러 없이 틀리는 버그</b>가 가장 무섭습니다. 그래서 분봉 41,638개를 원본 틱과 <b>전수 대조</b>해 불일치 0을 확인했습니다.</p>
+</div>
+
+<div class="file">
+<div class="fn">사례 9. 실시간 차트 갱신이 조용히 안 먹었다 <span class="pill warn">9시간</span></div>
+<p><b>원인</b>: 서버 캔들 축은 "KST를 UTC로 읽은 값", 웹소켓 시각은 "진짜 UTC". <b>정확히 9시간 차이</b>로 새 캔들이 전부 버려졌습니다.<br>
+<b>해결</b>: 실시간 시각에 <code>+9시간</code>을 더해 축 정렬.<br>
+<b>배운 것</b>: 타임존 버그는 <b>에러가 아니라 "아무 일도 안 일어남"</b>으로 나타납니다.</p>
+</div>
+
+<div class="file">
+<div class="fn">사례 10. 수집기가 살아 있는데 "꺼졌다"고 오판했다</div>
+<p><b>원인</b>: <code>tasklist</code>·<code>netstat</code>에 안 잡히고 로그 마지막 줄이 "서버 시작"이라 죽은 줄 알았습니다. (WSL에서 Windows 프로세스 조회가 신뢰되지 않음)<br>
+<b>해결·규칙</b>: 살아 있는지는 <b>DB의 "최근 60초 행수"로 판단</b>합니다. 이게 가장 확실합니다.<br>
+<b>배운 것</b>: <b>간접 신호(프로세스 목록)보다 직접 증거(데이터가 늘고 있는가)</b>를 봐야 합니다.</p>
+</div>
+
+<div class="file">
+<div class="fn">사례 11. "1개월" 탭이 18일치만 나왔다 <span class="pill n">2026-08-07</span></div>
+<p><b>증상</b>: 형이 "1개월 눌러도 그만큼 안 나온다"고 지적.<br>
+<b>원인</b>: <code>1M</code>만 <b>30분봉(분 데이터)</b>을 쓰고 있었는데, 분 데이터는 수집을 시작한 <b>2026-07-20부터만</b> 존재합니다. 일봉은 2024년부터 다 있는데 안 쓰고 있었습니다.<br>
+<b>해결</b>: <code>1M</code>을 일봉으로 전환. 같이 고쳐야 할 곳이 <b>3군데</b>였습니다 — 규격표(<code>chartRangeSpec</code>), <code>isDailyRange()</code>, <code>RANGE_BUCKET</code>.<br>
+<b>배운 것</b>: 해상도를 바꾸면 <b>시간축의 자료형까지 바뀝니다</b>(숫자 ↔ 문자열). 연결된 곳을 다 찾아야 합니다.</p>
+</div>
+
+<div class="file">
+<div class="fn">사례 12. "5년" 탭이 2년만 나왔다 / 날짜가 하루 밀렸다 <span class="pill n">2026-08-07</span></div>
+<p><b>원인 A</b>: 백필을 <code>--years=2</code>로 돌려서 <b>5년치 데이터가 애초에 없었습니다</b>. → 버튼을 <b>2년</b>으로 교체.<br>
+<b>원인 B</b>: 일봉 백필이 <b>하루 1회 자동 실행되지 않아</b> 최신이 어제에서 멈춰 있었습니다. → 스케줄러 등록 필요.<br>
+<b>배운 것</b>: UI가 약속한 것보다 <b>데이터가 부족하면 그건 UI 버그</b>입니다. 그리고 <b>"한 번 돌린 것"과 "매일 도는 것"은 다릅니다.</b></p>
+</div>
+
+<div class="file">
+<div class="fn">사례 13. 축소하면 빈 화면이 끝없이 끌려나왔다 <span class="pill n">2026-08-07</span></div>
+<p><b>원인</b>: 차트 시간축에 <b>경계 잠금이 없었습니다</b>(기본값 꺼짐).<br>
+<b>해결</b>: <code>fixLeftEdge</code> + <code>fixRightEdge</code>를 <b>둘 다</b> 켬.<br>
+<b>라이브러리 내부까지 확인한 것</b>: 둘 다 true일 때만 봉 최소폭이 <code>차트폭 ÷ 봉개수</code>로 잡히고 <code>minBarSpacing</code>은 무시됩니다. 그래서 <b>최대 축소 = 전체 데이터가 화면에 딱 참</b>이 됩니다. <b>하나만 켜면</b> <code>minBarSpacing</code>이 살아나 여백이 돌아옵니다.<br>
+<b>배운 것</b>: 옵션 이름만 보고 넣지 말고, <b>왜 그렇게 동작하는지 근거를 확인</b>하면 "짝으로 유지해야 한다" 같은 제약까지 알게 됩니다.</p>
+</div>
+
+
+<!-- ============================================ -->
+<h2 class="sec" id="principle"><span class="em">SECTION 12</span>실무 원칙 12가지</h2>
+
+<ol class="flow">
+<li><b>화면은 DB를 기다리지 않는다.</b> 저장이 느려도 사용자 경험은 안 느려져야 합니다.</li>
+<li><b>클라이언트 값은 안 믿는다.</b> 가격도 수량도 서버가 다시 확인합니다.</li>
+<li><b>돈이 움직이면 트랜잭션 + 행 잠금.</b> 중간에 죽으면 아무 일도 없어야 합니다.</li>
+<li><b>시각은 DB에게 묻는다.</b> PHP·Node·DB의 시계가 다 다릅니다.</li>
+<li><b>스키마는 코드가 만든다.</b> "형이 SQL 돌려야 함"은 다음 세션에서 잊힙니다.</li>
+<li><b>역할을 데이터베이스 문법으로 못박는다.</b> <code>INSERT IGNORE</code> 하나로 "정밀한 쪽이 이긴다"가 강제됩니다.</li>
+<li><b>지우기 전에 대체물이 있는지 확인한다.</b> <code>purge_logs</code>는 분봉 커버리지 90% 미만이면 건너뜁니다.</li>
+<li><b>되돌릴 수 없는 건 드라이런부터.</b> <code>--dry</code> 옵션을 먼저 만듭니다.</li>
+<li><b>테스트가 가능한 모양으로 떼어낸다.</b> <code>candles.js</code>는 순수 함수라 웹소켓 없이 39개 테스트가 돕니다.</li>
+<li><b>검증은 수치로 남긴다.</b> "잘 됩니다"가 아니라 "41,638개 대조 불일치 0".</li>
+<li><b>주석에 "왜"를 쓴다.</b> "무엇을 하는지"는 코드가 말합니다. 주석은 <b>왜 그렇게 했고 안 그러면 뭐가 깨지는지</b>를 적습니다.</li>
+<li><b>문서는 손으로 옮겨 적지 않는다.</b> 빌더가 실제 파일을 읽게 하면 오타도, 옛 버전도 섞일 수 없습니다.</li>
+</ol>
+
+
+<!-- ============================================ -->
+<h2 class="sec" id="interview"><span class="em">SECTION 13</span>면접 예상질문 25개</h2>
+
+<div class="qa"><div class="q">Q1. 이 프로젝트를 한 문장으로 소개해주세요.</div><div class="a">한국투자증권 오픈API로 실시간 시세를 받아, 가상 자금으로 매매를 체험하는 모의투자 웹서비스입니다. 실시간 데이터 처리와 시계열 데이터 압축이 핵심 기술 과제였습니다.</div></div>
+
+<div class="qa"><div class="q">Q2. 왜 PHP와 Node.js를 같이 썼나요?</div><div class="a">PHP는 요청-응답 후 종료되는 구조라 24시간 웹소켓 연결을 유지할 수 없습니다. 실시간 시세는 상주 프로세스가 필요해 Node로 분리했고, 화면·비즈니스 로직은 PHP가 맡습니다. 둘은 DB를 통해 만납니다.</div></div>
+
+<div class="qa"><div class="q">Q3. 초당 수십 건씩 오는 실시간 데이터를 어떻게 처리했나요?</div><div class="a">세 가지를 조합했습니다. ① 브라우저 전송을 DB 저장보다 <b>먼저</b> 해서 화면이 DB에 묶이지 않게 했고, ② 저장은 종목별 스로틀(원시 10초·현재가 1초)을 걸어 쓰기량을 체결량과 무관하게 고정했고, ③ 정밀도 손실은 메모리 분봉 누적으로 보완했습니다.</div></div>
+
+<div class="qa"><div class="q">Q4. 스로틀을 걸면 고가·저가가 부정확해지지 않나요?</div><div class="a">맞습니다. 그래서 <b>분봉 누적만은 스로틀 앞에</b> 뒀습니다. 모든 체결을 메모리에서 OHLC로 누적하고, DB 쓰기는 10초에 한 번 배치로 묶습니다. 저장량은 줄이면서 정밀도는 원본 그대로 유지됩니다.</div></div>
+
+<div class="qa"><div class="q">Q5. 1년치 차트를 그리면 데이터가 너무 많지 않나요?</div><div class="a">그래서 기간별로 해상도를 다르게 줍니다. 1일은 1분봉, 1주는 5분봉, 1개월 이상은 일봉입니다. 어느 탭을 눌러도 캔들이 수백 개로 유지돼서, 2년 보기가 오늘 보기보다 무겁지 않습니다. 1분봉으로 1년을 그렸다면 캔들 9만 개가 됐을 겁니다.</div></div>
+
+<div class="qa"><div class="q">Q6. 같은 데이터를 테이블 3개에 중복 저장하는 게 낭비 아닌가요?</div><div class="a">중복이 아니라 <b>정밀도와 크기의 교환</b>입니다. 원시 틱은 7일만 두고 지웁니다. 1분봉은 원본의 1/35 크기로 몇 달, 일봉은 하루 1행이라 몇 년을 보관합니다. 오래된 데이터일수록 굵은 해상도로 남기는 건 시계열 DB의 일반적인 전략(다운샘플링)이기도 합니다.</div></div>
+
+<div class="qa"><div class="q">Q7. 오래된 원시 데이터를 지울 때 위험하지 않았나요?</div><div class="a">복구가 불가능해서 안전장치를 세 겹 뒀습니다. ① 그날 분봉 커버리지가 90% 미만이면 그날은 <b>건너뜁니다</b>. ② <code>--dry</code>로 무엇이 지워질지 먼저 출력합니다. ③ 5만 행씩 청크로 지워 락이 오래 걸리지 않게 했습니다.</div></div>
+
+<div class="qa"><div class="q">Q8. 매수 로직에서 동시성 문제는 어떻게 막았나요?</div><div class="a">트랜잭션 안에서 <code>SELECT ... FOR UPDATE</code>로 잔고 행을 잠급니다. 잠그지 않으면 잔고 100만원으로 동시에 두 번 매수해서 잔고가 마이너스가 될 수 있습니다. 예외가 나면 <code>rollback</code>으로 전부 되돌립니다.</div></div>
+
+<div class="qa"><div class="q">Q9. 평균단가는 어떻게 계산하나요?</div><div class="a"><code>(기존수량×기존평단 + 신규수량×신규가) ÷ 총수량</code>입니다. 이동평균 방식이라 매수할 때마다 갱신됩니다. 전량 매도하면 보유 행 자체를 삭제합니다.</div></div>
+
+<div class="qa"><div class="q">Q10. 그러면 과거 시점의 평균단가는 어떻게 아나요?</div><div class="a">DB에 없습니다. <code>holdings.avg_price</code>는 '지금' 값이고 전량 매도하면 행이 사라지니까요. 그래서 거래내역의 실현수익률은 <b>주문을 시간순으로 재생(replay)</b>해서 매 시점 평단을 복원해 계산합니다. 매수는 원가에 더하고, 매도는 그 시점 평단으로 손익을 확정하는 방식입니다.</div></div>
+
+<div class="qa"><div class="q">Q11. SQL 인젝션은 어떻게 막았나요?</div><div class="a">prepared statement를 씁니다. SQL 틀을 먼저 보내고 값을 따로 보내므로, 값이 SQL 문법으로 해석될 수 없습니다. 이스케이프 함수로 막는 것보다 원리적으로 안전합니다.</div></div>
+
+<div class="qa"><div class="q">Q12. CSRF는 어떻게 막았나요?</div><div class="a">세션에만 존재하는 난수 토큰을 폼에 심고 서버에서 대조합니다. 외부 사이트는 세션 내용을 볼 수 없어 토큰을 만들 수 없습니다. 비교는 <code>hash_equals()</code>로 하는데, 일반 비교는 앞글자가 다르면 즉시 끝나서 응답 시간 차이로 토큰을 유추당할 수 있기 때문입니다.</div></div>
+
+<div class="qa"><div class="q">Q13. 관리자 권한은 어떻게 관리하나요?</div><div class="a">역할 기반(RBAC)입니다. 역할별 권한 목록을 두고 <code>adminCan()</code>으로 확인합니다. 중요한 건 <b>화면에서 버튼을 숨기는 것만으론 부족하다</b>는 점이라, 액션 핸들러에서 <code>requireAdminCan()</code>으로 서버가 다시 막습니다. 세션 이름도 유저와 분리해서 한쪽 로그인이 다른 쪽 권한이 되지 않게 했습니다.</div></div>
+
+<div class="qa"><div class="q">Q14. 가장 어려웠던 버그는 무엇인가요?</div><div class="a">타임존 버그입니다. 실시간 차트 갱신이 안 되는데 <b>에러가 하나도 안 났습니다</b>. 서버 캔들의 시간축은 'KST를 UTC로 읽은 값'이고 웹소켓 시각은 진짜 UTC라 정확히 9시간이 어긋났고, 새 캔들이 조건문에서 전부 버려지고 있었습니다. 이후로는 시각 계산을 전부 DB 시계 기준으로 통일했습니다.</div></div>
+
+<div class="qa"><div class="q">Q15. 에러 없이 틀리는 버그를 또 겪은 적 있나요?</div><div class="a">있습니다. <code>GROUP_CONCAT</code>의 기본 길이 제한 1024바이트에 걸려 30분봉의 시가·종가가 잘린 값으로 계산됐습니다. 경고조차 없었습니다. 그래서 분봉 41,638개를 원본 틱과 전수 대조해 불일치 0을 확인하는 검증을 넣었습니다.</div></div>
+
+<div class="qa"><div class="q">Q16. 수집기가 죽었는지 어떻게 판단하나요?</div><div class="a">프로세스 목록이 아니라 <b>DB의 최근 60초 행수</b>로 봅니다. 실제로 프로세스 조회가 신뢰되지 않아 살아 있는 수집기를 죽었다고 오판한 적이 있습니다. 간접 신호보다 직접 증거를 보는 게 맞습니다. 추가로 장중에 체결이 120초간 없으면 스스로 세션을 재접속하는 워치독도 있습니다.</div></div>
+
+<div class="qa"><div class="q">Q17. 외부 API 제한은 어떻게 다뤘나요?</div><div class="a">세 가지입니다. ① 액세스 토큰을 23시간 캐싱해 발급 횟수를 줄였고, ② 초당 제한 에러(EGW00201)가 오면 0.7초 후 최대 3회 재시도하며, ③ 웹소켓 구독은 세션당 약 41건 제한이 있어 상위 40종목만 실시간으로 받고 나머지는 REST로 보충합니다.</div></div>
+
+<div class="qa"><div class="q">Q18. 실시간 구독을 40개만 하면 상세 페이지는 어떻게 하나요?</div><div class="a">종목 상세를 열면 <code>watch</code> 메시지로 그 종목을 <b>동적으로 구독 추가</b>하고, 떠나면 해제합니다. 여러 사람이 같은 종목을 보고 있을 수 있어 <b>refcount</b>로 세고, 0이 될 때만 실제로 해제합니다.</div></div>
+
+<div class="qa"><div class="q">Q19. 장 마감 후에 화면이 비지 않나요?</div><div class="a">REST로 초기 로드를 하고 웹소켓은 그 위에 갱신만 얹는 2단 구조라, 장이 닫혀 있어도 마지막 상태가 그대로 보입니다.</div></div>
+
+<div class="qa"><div class="q">Q20. 과거 데이터는 어떻게 채웠나요?</div><div class="a">KIS 일봉 API로 백필했습니다. 실호출로 확인해보니 <b>한 번에 정확히 100행</b>이고, 구간을 길게 줘도 끝 날짜 기준 최근 100행만 줍니다. 그래서 끝 날짜를 뒤로 밀어가며 반복 호출하는 스크립트를 만들었습니다. 무한루프를 막는 가드도 넣었습니다.</div></div>
+
+<div class="qa"><div class="q">Q21. 마이그레이션 없이 스키마가 바뀌면 어떻게 하나요?</div><div class="a">코드가 스스로 보강합니다. <code>CREATE TABLE IF NOT EXISTS</code>와, 컬럼은 <code>information_schema</code>로 존재를 확인한 뒤 ALTER 합니다. <code>ADD COLUMN IF NOT EXISTS</code>는 MariaDB 전용이라 MySQL에서는 못 씁니다. 배포 시 수동 SQL 단계를 없애는 게 목적입니다.</div></div>
+
+<div class="qa"><div class="q">Q22. 테스트는 어떻게 했나요?</div><div class="a">분봉 로직을 순수 함수 모듈로 분리해서 웹소켓 없이 실행할 수 있게 만들고, 회귀 테스트 39개를 붙였습니다. 타임존, OHLC 정확성, 이상치 방어, 델타 중복 방지, 메모리 정리, 종목 독립성, 1만 건 부하까지 확인합니다. 돈이 걸린 숫자라 회귀 테스트가 꼭 필요하다고 판단했습니다.</div></div>
+
+<div class="qa"><div class="q">Q23. 팀원과 DB를 공유한다고 했는데 충돌은 없나요?</div><div class="a">파이썬 팀원과 같은 MySQL을 씁니다. 테이블 이름 규칙이 갈려 있어(<code>py_*</code> 계열 vs <code>stock_*</code> 계열) 사실상 분리돼 있습니다. 다만 서버 시계가 UTC라 우리 KST 로직과 어긋나는 문제가 있어, 커넥션마다 세션 타임존을 KST로 고정했습니다. 용량도 공유 자원이라 원시 로그 정리 정책을 따로 만들었습니다.</div></div>
+
+<div class="qa"><div class="q">Q24. 성능 개선 사례가 있나요?</div><div class="a">분봉 저장을 종목별 개별 INSERT에서 <b>한 방의 multi-row INSERT</b>로 묶었습니다. 원격 DB는 왕복만 6ms라 40종목을 나눠 보내면 그것만 0.24초가 날아갑니다. 또 차트 조회는 분봉 테이블을 읽게 바꿔서, 원시 로그 즉석 집계 대비 <b>4.3초 → 46ms</b>로 줄었습니다.</div></div>
+
+<div class="qa"><div class="q">Q25. 앞으로 개선하고 싶은 부분은?</div><div class="a">세 가지입니다. ① 자동매매 로직 — 화면과 DB 스키마는 준비돼 있고 매매 규칙만 붙이면 됩니다. ② 로그 로테이션 — 수집기 로그가 150MB를 넘겼습니다. ③ 시크릿을 파일 평문에서 환경변수로 분리하는 것입니다. 지금은 <code>.htaccess</code>로 막고 있지만 방어가 한 겹뿐입니다.</div></div>
+
+
+<hr>
+<p class="lead" style="text-align:center; padding:20px 0;">
+1편 끝 — 이어서 <b>2편 코드 해석편</b>에서 실제 코드를 줄 단위로 읽습니다.<br>
+<span style="font-size:13px; color:var(--dim);">이 노트는 <code>docs/note1_template.html</code>에서 빌드되었습니다 · 기준일 2026-08-07</span>
+</p>
+
+</div>
+</body>
+</html>

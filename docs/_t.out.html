@@ -1,0 +1,28 @@
+<div class="codewrap"><div class="codehead">config/db.php  (전체)</div><pre><code><span class="ln">   1</span> &lt;?php
+<span class="ln">   2</span> // config/db.php
+<span class="ln">   3</span> // DB 연결 정보 (Laragon 기본값)
+<span class="ln">   4</span> 
+<span class="ln">   5</span> $host = &#039;lambda.cm-vw.com&#039;;
+<span class="ln">   6</span> $dbname = &#039;lambda_stock_db&#039;;
+<span class="ln">   7</span> $user = &#039;lambda&#039;;
+<span class="ln">   8</span> $pass = &#039;••••••••[마스킹됨]&#039;;
+<span class="ln">   9</span> 
+<span class="ln">  10</span> $conn = mysqli_connect($host, $user, $pass, $dbname);
+<span class="ln">  11</span> 
+<span class="ln">  12</span> if (!$conn) {
+<span class="ln">  13</span>     die(&quot;DB 연결 실패: &quot; . mysqli_connect_error());
+<span class="ln">  14</span> }
+<span class="ln">  15</span> 
+<span class="ln">  16</span> mysqli_set_charset($conn, &quot;utf8mb4&quot;);
+<span class="ln">  17</span> 
+<span class="ln">  18</span> // 원격 공용 DB는 서버 시계가 UTC인데, 우리 데이터·cron·분봉 로직은 전부 KST 기준이다.
+<span class="ln">  19</span> // 세션 타임존을 KST로 고정해야 NOW()/CURRENT_TIMESTAMP 가 기존 행과 같은 시각을 쓴다.
+<span class="ln">  20</span> // (안 맞추면 새로 들어가는 행이 9시간 뒤로 찍혀서 &#039;오늘&#039; 조회·정렬·집계가 전부 깨짐)
+<span class="ln">  21</span> mysqli_query($conn, &quot;SET time_zone = &#039;+09:00&#039;&quot;);
+</code></pre></div>
+<div class="codewrap"><div class="codehead">config/kis_config.php  (전체)</div><pre><code><span class="ln">   1</span> &lt;?php
+<span class="ln">   2</span> define(&#039;KIS_APP_KEY&#039;, &#039;••••••••[마스킹됨]&#039;);
+<span class="ln">   3</span> define(&#039;KIS_APP_SECRET&#039;, &#039;••••••••[마스킹됨]&#039;);
+<span class="ln">   4</span> define(&#039;KIS_ACCOUNT_NO&#039;, &#039;••••••••[마스킹됨]&#039;);
+<span class="ln">   5</span> define(&#039;KIS_ACCOUNT_PRDT_CD&#039;, &#039;01&#039;);
+</code></pre></div>

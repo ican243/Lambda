@@ -106,6 +106,17 @@ include 'includes/header.php';
                     <span class="drag-handle" title="끌어서 이동"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="4" r="1.4"/><circle cx="11" cy="4" r="1.4"/><circle cx="5" cy="8" r="1.4"/><circle cx="11" cy="8" r="1.4"/><circle cx="5" cy="12" r="1.4"/><circle cx="11" cy="12" r="1.4"/></svg></span>
                 </span>
             </div>
+            <!-- 기간 탭 — 누르는 기간에 따라 서버가 해상도(1분봉/5분봉/일봉)를 알아서 바꿔준다.
+                 그래서 '1년'을 눌러도 캔들 수가 수백 개로 유지되고 브라우저가 안 무거워진다. -->
+            <div class="chart-ranges" id="chart-ranges">
+                <button class="on" data-range="1D">1일</button>
+                <button data-range="1W">1주</button>
+                <button data-range="1M">1개월</button>
+                <button data-range="3M">3개월</button>
+                <button data-range="1Y">1년</button>
+                <button data-range="2Y">2년</button>
+                <span class="cr-note" id="chart-note">1분봉</span>
+            </div>
             <div id="chart-container" style="width:100%;"></div>
         </div>
     </div>
@@ -378,7 +389,25 @@ include 'includes/header.php';
         layout: { background: { color: 'transparent' }, textColor: '#8b95a1', fontFamily: 'Pretendard' },
         grid: { vertLines: { color: '#f2f4f6' }, horzLines: { color: '#f2f4f6' } },
         rightPriceScale: { borderColor: '#e5e8eb' },
-        timeScale: { borderColor: '#e5e8eb', timeVisible: true, secondsVisible: false },
+        // 시간축. fixLeftEdge/fixRightEdge 가 이 위젯의 '경계 잠금'이다.
+        //   끄면(기본값) 축소·드래그로 데이터 바깥까지 끝없이 끌려나가서 화면 절반이 빈 여백이 된다.
+        //   켜면 첫 봉 왼쪽 / 마지막 봉 오른쪽으로는 못 넘어가므로,
+        //   '최대한 축소 = 가진 데이터가 화면에 딱 차는 상태'가 되어 여백이 생기지 않는다.
+        // rightOffset:0 은 마지막 봉을 오른쪽 끝에 붙인다(기본 여백 제거).
+        timeScale: {
+            borderColor: '#e5e8eb',
+            timeVisible: true,
+            secondsVisible: false,
+            fixLeftEdge: true,
+            fixRightEdge: true,
+            rightOffset: 0,
+            // ⚠️ minBarSpacing 은 일부러 안 준다.
+            //    라이브러리 내부(ec())를 보면 fixLeftEdge와 fixRightEdge가 '둘 다' true일 때
+            //    봉 최소폭을 (차트폭 ÷ 봉개수)로 잡고 minBarSpacing 은 아예 쓰지 않는다.
+            //    → 최대 축소 지점이 정확히 '전체 데이터가 화면에 딱 차는 상태'가 된다. 이게 우리가 원한 동작.
+            //    둘 중 하나라도 끄면 그 순간 minBarSpacing(기본 0.5)이 살아나 다시 여백이 생긴다. 짝으로 유지할 것.
+            lockVisibleTimeRangeOnResize: true,   // 창 크기를 바꿔도 보고 있던 구간을 유지
+        },
         crosshair: { mode: 0 },
         autoSize: true,   // 컨테이너 크기를 자동 감지 → 창 리사이즈에 매끄럽게 대응
     });
@@ -388,12 +417,53 @@ include 'includes/header.php';
     function createLineSeries() { return chart.addLineSeries({ color: '#3182f6', lineWidth: 2 }); }
     series = createCandleSeries();
 
-    async function loadChart() {
-        const res = await fetch('get_stock_chart.php?stock_code=' + stockCode);
-        candleData = await res.json();
-        renderChart();
-        chart.timeScale().fitContent();
+    // ---------- 기간(range) 전환 ----------
+    // 서버가 기간별로 해상도를 바꿔 준다. 프론트는 '지금 어떤 해상도인지'만 알면 된다.
+    //   · 분/시간 단위 → time 이 숫자(유닉스 초). 시:분 라벨을 보여준다.
+    //   · 일 단위      → time 이 'YYYY-MM-DD' 문자열. lightweight-charts가 business day로 알아듣고
+    //                    주말·휴장일을 알아서 건너뛰어 그린다. 시:분 라벨은 끈다.
+    const RANGE_LABEL = { '1D': '1분봉', '1W': '5분봉', '1M': '일봉', '3M': '일봉', '1Y': '일봉', '2Y': '일봉', '5Y': '일봉' };
+    let currentRange = '1D';
+    let loadSeq = 0;                  // 빠르게 연타했을 때 늦게 온 응답이 최신 화면을 덮지 않도록
+
+    async function loadChart(range = currentRange) {
+        const seq = ++loadSeq;
+        const box = document.getElementById('chart-ranges');
+        if (box) box.classList.add('loading');
+        try {
+            const res = await fetch('get_stock_chart.php?stock_code=' + stockCode + '&range=' + range);
+            const data = await res.json();
+            if (seq !== loadSeq) return;             // 그 사이 다른 기간을 눌렀다 → 이 응답은 버린다
+            candleData = Array.isArray(data) ? data : [];
+            currentRange = range;
+
+            // 일봉이면 시:분 축을 끈다 (안 끄면 전부 00:00으로 찍힌다)
+            chart.applyOptions({ timeScale: { timeVisible: !isDailyRange(), secondsVisible: false } });
+            renderChart();
+            chart.timeScale().fitContent();
+
+            const note = document.getElementById('chart-note');
+            if (note) note.textContent = candleData.length
+                ? `${RANGE_LABEL[range] || ''} · ${candleData.length}개`
+                : '데이터 없음';
+        } catch (e) {
+            console.warn('차트 로드 실패', e);
+        } finally {
+            if (box) box.classList.remove('loading');
+        }
     }
+
+    // 일봉 구간 = 서버가 time 을 'YYYY-MM-DD' 문자열로 주는 구간.
+    // ⚠️ 여기에 빠뜨리면 시:분 축이 켜진 채라 모든 봉이 00:00으로 찍힌다. 규격표(chartRangeSpec)와 항상 같이 고칠 것.
+    function isDailyRange() { return ['1M', '3M', '1Y', '2Y', '5Y'].includes(currentRange); }
+
+    document.getElementById('chart-ranges').addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-range]');
+        if (!btn || btn.classList.contains('on')) return;
+        document.querySelectorAll('#chart-ranges button').forEach(b => b.classList.toggle('on', b === btn));
+        loadChart(btn.dataset.range);
+    });
+
     function renderChart() {
         if (currentType === 'candle') series.setData(candleData);
         else series.setData(candleData.map(c => ({ time: c.time, value: c.close })));
@@ -489,17 +559,38 @@ include 'includes/header.php';
         updateLastCandle(d.price, Math.floor(new Date(d.created_at).getTime() / 1000));
     };
 
+    // 실시간 체결 → 마지막 캔들 갱신
+    //
+    // 🔴 여기 타임존 함정이 하나 있다(예전엔 조용히 틀려 있었다):
+    //    서버가 주는 캔들의 시간축은 'KST 벽시계 값을 UTC로 읽은 값'이다.
+    //    lightweight-charts가 시간축을 UTC로 해석해 라벨을 찍기 때문에, 이렇게 넣어야
+    //    화면에 09:00이 09:00으로 보인다.
+    //    반면 웹소켓이 주는 created_at 은 new Date().toISOString() = '진짜 UTC'다.
+    //    그대로 쓰면 두 값이 정확히 9시간 어긋나서, 실시간 캔들이 과거 자리에 떨어지고
+    //    `currentSlot > last.time` 조건에 걸려 조용히 버려진다(=실시간 갱신이 안 먹음).
+    //    → 실시간 시각에도 +9시간을 더해 서버 캔들과 같은 축으로 맞춘다.
+    const KST_OFFSET = 9 * 3600;
+
+    // 기간별 캔들 폭(초). 일봉 구간(1M/3M/1Y/2Y)은 일부러 비워 둔다 → 실시간 갱신을 하지 않는다.
+    // ⚠️ 여기 남겨두면 안 된다: 일봉 구간의 time 은 'YYYY-MM-DD' 문자열인데 실시간 캔들은 숫자라
+    //    섞이는 순간 lightweight-charts 가 에러를 내거나 봉이 엉뚱한 자리에 떨어진다.
+    //    (1M을 일봉으로 바꾼 2026-08-07에 1800 항목을 제거함)
+    const RANGE_BUCKET = { '1D': 60, '1W': 300 };
+
     function updateLastCandle(price, timestamp) {
-        const currentMinute = Math.floor(timestamp / 60) * 60;
+        const bucketSec = RANGE_BUCKET[currentRange];
+        if (!bucketSec) return;                       // 일봉 보는 중 → 과거 차트라 건드리지 않음
+
+        const slot = Math.floor((timestamp + KST_OFFSET) / bucketSec) * bucketSec;
         if (candleData.length === 0) {
-            candleData.push({ time: currentMinute, open: price, high: price, low: price, close: price });
+            candleData.push({ time: slot, open: price, high: price, low: price, close: price });
         } else {
             const last = candleData[candleData.length - 1];
-            if (last.time === currentMinute) {
+            if (last.time === slot) {
                 last.high = Math.max(last.high, price); last.low = Math.min(last.low, price); last.close = price;
-            } else if (currentMinute > last.time) {
-                candleData.push({ time: currentMinute, open: price, high: price, low: price, close: price });
-            } else { return; }
+            } else if (slot > last.time) {
+                candleData.push({ time: slot, open: price, high: price, low: price, close: price });
+            } else { return; }                        // 이미 지나간 칸의 뒤늦은 체결 → 무시
         }
         const last = candleData[candleData.length - 1];
         if (currentType === 'candle') series.update(last);

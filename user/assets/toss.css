@@ -566,3 +566,27 @@ body {
     100% { box-shadow: 0 0 0 12px rgba(49,130,246,0); }
 }
 .widget.w-highlight { animation: wHighlight 1.6s ease-out; outline: 2px solid var(--primary); outline-offset: -2px; }
+
+/* =========================================================
+   섹션20. 차트 기간 탭 (1일/1주/1개월/3개월/1년/5년)
+   기간마다 서버가 해상도를 바꿔 주므로(1분봉→일봉) 어떤 탭이든 캔들 수는 수백 개로 유지된다.
+   ========================================================= */
+.chart-ranges { display: flex; align-items: center; gap: 4px; flex: none;
+                margin: -4px 0 10px; flex-wrap: wrap; }
+.chart-ranges button { border: none; background: none; padding: 6px 11px; border-radius: 8px;
+                       font-family: inherit; font-size: 13px; font-weight: 600;
+                       color: var(--text-sub); cursor: pointer; transition: background .15s, color .15s; }
+.chart-ranges button:hover { background: #f2f4f6; color: var(--text); }
+.chart-ranges button.on { background: var(--primary-weak); color: var(--primary); }
+
+/* 지금 해상도가 뭔지 알려주는 작은 라벨 (예: "5분봉 · 388개") */
+.chart-ranges .cr-note { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--text-sub);
+                         padding-left: 8px; white-space: nowrap; }
+
+/* 불러오는 동안 살짝 흐리게 — 기간을 눌렀는데 아무 반응 없는 것처럼 보이지 않게 */
+.chart-ranges.loading { opacity: .5; pointer-events: none; }
+
+@media (max-width: 560px) {
+    .chart-ranges button { padding: 6px 8px; font-size: 12px; }
+    .chart-ranges .cr-note { display: none; }
+}

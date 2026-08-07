@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>모아증권 코드 공부노트 · 2편 코드 해석</title>
+<style>
+  :root{
+    --bg:#0f141a; --card:#161d26; --card2:#1b232e; --line:#26303c;
+    --text:#d9e0e8; --sub:#8b97a6; --dim:#6b7686;
+    --accent:#4a90ff; --up:#ff5f6e; --down:#4a90ff; --ok:#3ecf8e; --warn:#ffcf5c;
+    --code:#0c1218; --chip:#22303f;
+  }
+  *{box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic","맑은 고딕",Pretendard,system-ui,sans-serif;
+    font-size:17px; line-height:1.8; letter-spacing:-0.01em;
+    -webkit-font-smoothing:antialiased;
+    word-break:keep-all; overflow-wrap:anywhere;
+  }
+  .wrap{max-width:820px; margin:0 auto; padding:0 18px 120px;}
+  .top{position:sticky; top:0; z-index:20; background:rgba(15,20,26,.92); backdrop-filter:blur(8px); border-bottom:1px solid var(--line); padding:14px 18px;}
+  .top b{color:#fff; font-size:17px;} .top b span{color:var(--accent);}
+  .top .mini{color:var(--sub); font-size:12px; margin-top:2px;}
+  .hero{padding:34px 0 10px;}
+  .hero h1{font-size:30px; line-height:1.35; margin:0 0 10px; color:#fff; font-weight:800;}
+  .hero p{color:var(--sub); margin:0; font-size:15px;}
+  .toc{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px 18px; margin:22px 0;}
+  .toc h3{margin:0 0 10px; font-size:14px; color:var(--sub); font-weight:700; letter-spacing:.02em;}
+  .toc a{display:block; color:var(--text); text-decoration:none; padding:7px 0; border-bottom:1px solid var(--line); font-size:15.5px;}
+  .toc a:last-child{border-bottom:none;}
+  .toc a span{color:var(--dim); font-size:13px; font-family:ui-monospace,monospace;}
+  h2.sec{font-size:23px; color:#fff; margin:48px 0 6px; padding-top:14px; font-weight:800; border-top:2px solid var(--line);}
+  h2.sec .em{font-size:14px; color:var(--accent); display:block; font-weight:700; letter-spacing:.04em; margin-bottom:4px;}
+  h3.sub{font-size:18px; color:#eaf0f7; margin:30px 0 10px; font-weight:700;}
+  h4.ssub{font-size:16px; color:#cfe0f5; margin:22px 0 8px; font-weight:700;}
+  p{margin:12px 0;}
+  .lead{color:var(--sub); font-size:15.5px;}
+  b,strong{color:#fff;}
+  ul,ol{padding-left:22px; margin:12px 0;} li{margin:7px 0;}
+  .chips{display:flex; flex-wrap:wrap; gap:6px; margin:12px 0;}
+  .chip{font-size:12px; padding:3px 9px; border-radius:999px; background:var(--chip); color:#b9c6d6; border:1px solid var(--line);}
+  .chip.name{background:#12233b; color:#7fb2ff; border-color:#1e3a5f;}
+  .chip.act{background:#122b22; color:#6be0a8; border-color:#1d4636;}
+  .chip.warn{background:#2e2612; color:#ffcf5c; border-color:#4a3d1a;}
+  pre{background:var(--code); border:1px solid var(--line); border-radius:12px; padding:13px 14px; overflow-x:auto; font-size:13px; line-height:1.62; margin:12px 0;}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+  pre code{color:#c8d4e2; white-space:pre;}
+  p code,li code,td code{background:var(--code); border:1px solid var(--line); border-radius:6px; padding:1px 6px; font-size:14px; color:#9fc3ff;}
+  .tbl{width:100%; border-collapse:collapse; margin:12px 0; font-size:14px; display:block; overflow-x:auto;}
+  .tbl th,.tbl td{border:1px solid var(--line); padding:8px 10px; text-align:left; vertical-align:top;}
+  .tbl th{background:var(--card2); color:#cdd8e4; white-space:nowrap;}
+  .note{background:#12233b; border:1px solid #1e3a5f; border-radius:12px; padding:12px 14px; margin:14px 0; font-size:14.5px; color:#bcd4f2;}
+  .warn-box{background:#2a1e12; border:1px solid #4a3418; border-radius:12px; padding:12px 14px; margin:14px 0; font-size:14.5px; color:#ffddaa;}
+  .bad{background:#2c1418; border:1px solid #55222b; border-radius:12px; padding:12px 14px; margin:14px 0; font-size:14.5px; color:#ffc2cb;}
+  .good{background:#0f2a1e; border:1px solid #1d4a36; border-radius:12px; padding:12px 14px; margin:14px 0; font-size:14.5px; color:#a8e9c8;}
+  .diagram{background:var(--code); border:1px solid var(--line); border-radius:12px; padding:14px; font-family:ui-monospace,monospace; font-size:12.5px; line-height:1.7; overflow-x:auto; color:#9fb3c8; white-space:pre;}
+  hr{border:none; border-top:1px solid var(--line); margin:26px 0;}
+  /* ---- 코드블록 (빌더가 생성) ---- */
+  .codewrap{margin:16px 0;}
+  .codehead{background:var(--card2); border:1px solid var(--line); border-bottom:none; border-radius:12px 12px 0 0; padding:8px 12px; font-family:ui-monospace,monospace; font-size:12.5px; color:#9fc3ff; word-break:break-all;}
+  .codewrap pre{border-radius:0 0 12px 12px; margin:0;}
+  .ln{color:#3d4a59; user-select:none;}
+  /* ---- 줄 해석 박스 ---- */
+  .read{border:1px solid #1e3a5f; background:#101c2e; border-radius:12px; padding:13px 15px; margin:12px 0 22px; font-size:15px;}
+  .read .rt{color:#7fb2ff; font-weight:700; font-size:13.5px; letter-spacing:.02em; margin-bottom:6px;}
+  .read ul{margin:8px 0 0; padding-left:20px;}
+  .read li{margin:6px 0;}
+  .read .lnum{color:#7fb2ff; font-family:ui-monospace,monospace; font-weight:700;}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <b>모아<span>증권</span> 코드 해석편</b>
+  <div class="mini">2편 · 실제 코드 + 줄 단위 해석  |  기준일 2026-08-07</div>
+</div>
+
+<div class="wrap">
+
+<div class="hero">
+  <h1>2편 — 코드 해석편</h1>
+  <p>여기 나오는 코드는 전부 <b>지금 이 순간 실제 파일에서 그대로 뽑아온 것</b>입니다.<br>
+  손으로 옮겨 적지 않고 빌더가 파일을 직접 읽어 넣었으므로 <b>오타나 옛날 버전이 섞일 수 없습니다.</b></p>
+</div>
+
+<div class="note">
+<b>읽는 법</b><br>
+① <b>검은 코드 박스</b> = 진짜 코드 (왼쪽 숫자는 실제 파일의 줄 번호)<br>
+② <b>파란 박스 🔍</b> = 그 줄이 무슨 뜻인지, 왜 그렇게 짰는지<br>
+개념·용어가 막히면 <b>1편 개념·구조편</b>을 같이 펴 두세요.
+</div>
+
+<div class="warn-box">
+<b>🔒 비밀값은 자동으로 가려집니다</b><br>
+<code>config/db.php</code>의 DB 비밀번호, <code>kis_config.php</code>의 KIS 앱키·시크릿은
+빌더가 <b>빌드할 때 자동으로 <code>••••••••[마스킹됨]</code></b>로 바꿉니다.
+빌드 마지막에 결과물 전체를 다시 훑어 비밀값이 남았는지 검사하고, 남아 있으면 빌드를 실패시킵니다.
+그래서 이 문서는 <b>남에게 보여줘도 안전</b>합니다.
+</div>
+
+<div class="toc">
+  <h3>목차 — 24개 코드</h3>
+  <a href="#f1">1. DB 연결과 타임존 <span>config/db.php</span></a>
+  <a href="#f2">2. 설정 파일 차단 <span>config/.htaccess · stock-ws/.htaccess</span></a>
+  <a href="#f3">3. 운영 공통층 <span>config/app.php</span></a>
+  <a href="#f4">4. CSRF 방어 <span>config/app.php</span></a>
+  <a href="#f5">5. 접속 로깅 <span>config/app.php</span></a>
+  <a href="#f6">6. KIS 토큰 발급과 캐싱 <span>config/kis_api.php</span></a>
+  <a href="#f7">7. 시세 API 공통 헬퍼 <span>config/kis_api.php</span></a>
+  <a href="#f8">8. 일봉 API — 100행의 벽 <span>config/kis_api.php</span></a>
+  <a href="#f9">9. 실주문과 해시키 <span>config/kis_api.php</span></a>
+  <a href="#f10">10. 오픈 리다이렉트 방어 <span>user/func.php</span></a>
+  <a href="#f11">11. 로그인 <span>user/login_process.php</span></a>
+  <a href="#f12">12. 매수 — 트랜잭션의 핵심 <span>user/func.php</span></a>
+  <a href="#f13">13. 매도 <span>user/func.php</span></a>
+  <a href="#f14">14. 과거 평단 복원 <span>user/func.php</span></a>
+  <a href="#f15">15. 스키마 자동 보강 <span>user/func.php</span></a>
+  <a href="#f16">16. 차트 규격표 <span>user/func.php</span></a>
+  <a href="#f17">17. 분봉 조회 — 자가 치유 <span>user/func.php</span></a>
+  <a href="#f18">18. 일봉 조회와 기준 시각 <span>user/func.php</span></a>
+  <a href="#f19">19. 조용히 틀리는 버그 <span>user/func.php</span></a>
+  <a href="#f20">20. 차트 데이터 창구 <span>user/get_stock_chart.php</span></a>
+  <a href="#f21">21. 1분봉 누적기 <span>stock-ws/candles.js</span></a>
+  <a href="#f22">22. 분봉 배치 저장 <span>stock-ws/db.js</span></a>
+  <a href="#f23">23. 체결 처리와 종료 <span>stock-ws/index.js</span></a>
+  <a href="#f24">24. cron 3종 <span>cron/*.php</span></a>
+</div>
+
+
+<!-- ============================================================ -->
+<h2 class="sec" id="f1"><span class="em">CODE 1</span>DB 연결과 타임존</h2>
+<p class="lead">모든 PHP가 여기서 시작합니다. 21줄짜리 작은 파일인데, <b>뒤쪽 절반이 이 프로젝트에서 가장 중요한 3줄</b>입니다.</p>
+
+<!--CODE:config/db.php-->
+
+<div class="read">
+<div class="rt">🔍 줄 해석</div>
+<ul>
+<li><span class="lnum">5~8</span> 접속 정보. <b>여기가 바뀐 부분입니다</b> — 예전엔 <code>localhost</code>/<code>stock_db</code>였는데 지금은 <b>원격 공용 DB</b>입니다. 비밀번호는 빌더가 가렸습니다.</li>
+<li><span class="lnum">10~14</span> 연결 시도. 실패하면 <code>die()</code>로 즉시 멈춥니다. DB 없이 페이지를 반쯤 그리는 것보다 명확히 죽는 게 낫습니다.</li>
+<li><span class="lnum">16</span> 문자셋을 <code>utf8mb4</code>로. 이걸 안 하면 한글 종목명이 깨집니다.</li>
+<li><span class="lnum">18~</span> <b>이 파일의 핵심.</b> 원격 DB 서버 시계는 <b>UTC</b>인데 우리 데이터·로직은 전부 <b>KST</b>입니다. 세션 타임존을 고정하지 않으면 새로 들어가는 행이 <b>9시간 뒤로</b> 찍혀서 "오늘" 조회·정렬·집계가 전부 어긋납니다.</li>
+</ul>
+</div>
+
+<div class="warn-box">
+<b>새 DB 접속 코드를 만들면 반드시 같이 걸 것.</b> Node 쪽도 <code>stock-ws/db.js</code>에서 똑같이 <code>SET time_zone='+09:00'</code>을 겁니다(CODE 22).
+PHP와 Node가 <b>같은 시계</b>를 봐야 분봉 키가 맞습니다.
+</div>
+
+
+<!-- ============================================================ -->
+<h2 class="sec" id="f2"><span class="em">CODE 2</span>설정 파일 차단</h2>
+<p class="lead">비밀이 담긴 폴더는 <b>웹으로 열리면 안 됩니다.</b> 한 줄짜리 방어지만 없으면 끝입니다.</p>
+
+<!--CODE:config/.htaccess-->
+
+<div class="read">
+<div class="rt">🔍 줄 해석</div>
+<ul>
+<li><span class="lnum">14~17</span> Apache 2.4 문법으로 <b>이 폴더 전체를 웹 접근 금지</b>.</li>
+<li><span class="lnum">19~22</span> 옛 Apache(2.2)에서도 동작하게 폴백. 서버 버전을 모를 때 두 가지를 다 써두는 게 안전합니다.</li>
+<li><b>왜 이래도 사이트가 잘 도나?</b> PHP가 <code>require_once</code>로 부르는 건 <b>서버 내부 파일 읽기</b>라 웹 접근 규칙과 무관합니다. 막아도 전혀 지장이 없습니다.</li>
+</ul>
+</div>
+
+<!--CODE:stock-ws/.htaccess-->
+
+<div class="bad">
+<b>실제로 뚫려 있었습니다.</b> <code>stock-ws/.env</code>에는 DB 비밀번호와 KIS 시크릿이 들어 있는데,
+한동안 웹에서 <b>200으로 열렸습니다</b>. 지금은 막았지만, 이 PC를 외부에 노출한 적이 있다면 <b>비밀번호와 KIS 시크릿을 교체</b>하는 게 안전합니다.
+</div>
+
+
+<!-- ============================================================ -->
+<h2 class="sec" id="f3"><span class="em">CODE 3</span>운영 공통층 — 스키마 자동 생성</h2>
+<p class="lead">"형이 SQL을 직접 돌려야 함"을 없애는 장치입니다.</p>
+
+<!--CODE:config/app.php:FN:ensureOpsSchema-->
+
+<div class="read">
+<div class="rt">🔍 줄 해석</div>
+<ul>
+<li><code>CREATE TABLE IF NOT EXISTS</code> — 이미 있으면 조용히 넘어갑니다. 그래서 <b>몇 번을 호출해도 안전</b>합니다(멱등).</li>
+<li><code>INSERT IGNORE ... app_settings</code> — 기본 설정값 3개를 심습니다. <code>IGNORE</code>라서 이미 형이 바꿔둔 값을 <b>덮어쓰지 않습니다</b>. 이 한 단어가 "초기화"와 "복구"를 가릅니다.</li>
+<li><code>access_logs</code>에 인덱스 3개(ip·user·created) — 나중에 "이 IP가 언제 뭘 했나"를 빠르게 찾기 위한 준비입니다.</li>
+<li><b>왜 이렇게까지 하나</b>: 배포 절차에 수동 SQL 단계가 있으면 다음 세션에서 잊힙니다. 실제로 이 프로젝트에서 마이그레이션 파일 때문에 한 번 크게 헤맸습니다(<code>ADD COLUMN IF NOT EXISTS</code>는 MariaDB 전용).</li>
+</ul>
+</div>
+
+
+<!-- ============================================================ -->
+<h2 class="sec" id="f4"><span class="em">CODE 4</span>CSRF 방어</h2>
+<p class="lead">"로그인된 형의 브라우저를, <b>다른 사이트가 시켜서</b> 우리 서버로 요청을 쏘게 하는" 공격을 막습니다.</p>
+
+<div class="diagram">[CSRF 공격 시나리오]
+  ① 형이 우리 사이트에 로그인 (세션 쿠키 보유)
+  ② 형이 악성 사이트 방문
+  ③ 악성 사이트가 숨겨진 폼으로 우리 서버에 POST
+       → 브라우저는 쿠키를 "자동으로" 같이 보냄
+       → 서버 입장에선 형이 보낸 요청과 구별이 안 됨   ⚠️
+
+[막는 원리]
+  세션 안에만 있는 난수 토큰을 폼에 심고 서버에서 대조.
+  악성 사이트는 우리 세션 내용을 읽을 수 없으므로 토큰을 만들 수 없다.</div>
+
+<!--CODE:config/app.php:FN:csrfToken-->
+<!--CODE:config/app.php:FN:csrfValid-->
+
+<div class="read">
+<div class="rt">🔍 줄 해석</div>
+<ul>
+<li><code>bin2hex(random_bytes(32))</code> — 암호학적으로 안전한 난수 64자. <code>rand()</code> 같은 건 예측 가능해서 쓰면 안 됩니다.</li>
+<li>토큰을 <b>세션에 저장</b>하고 폼에는 사본을 심습니다. 세션은 서버에 있어 외부에서 못 읽습니다.</li>
+<li><code>$_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN']</code> — 폼 제출과 <b>fetch(JSON) 양쪽</b>을 다 받습니다. 헤더로도 보낼 수 있게 열어둔 것입니다.</li>
+<li><b><code>hash_equals()</code>가 핵심</b> — 일반 <code>==</code>는 첫 글자가 다르면 즉시 끝납니다. 그 <b>응답 시간 차이</b>로 토큰을 한 글자씩 알아낼 수 있습니다(타이밍 공격). <code>hash_equals</code>는 항상 같은 시간이 걸립니다.</li>
+</ul>
+</div>
+
+<!--CODE:config/app.php:FN:requireCsrf-->
+
+<div class="read">
+<div class="rt">🔍 줄 해석</div>
+<ul>
+<li>맨 처음 <code>REQUEST_METHOD !== 'POST'</code>면 그냥 통과 — <b>조회(GET)에는 CSRF 검사가 필요 없습니다.</b> 상태를 바꾸지 않으니까요.</li>
+<li><code>$mode='json'</code> — 화면 이동이 필요 없는 fetch 요청에는 <b>403 + JSON</b>으로 답합니다. 폼 제출에는 리다이렉트로 답합니다. 같은 방어를 두 가지 방식으로 낼 수 있게 만든 것입니다.</li>
+<li>마지막 <code>exit</code>가 중요합니다. 안 붙이면 <b>차단해놓고 아래 코드가 계속 실행</b>됩니다.</li>
+</ul>
+</div>
+
+
+<!-- ============================================================ -->
+<h2 class="sec" id="f5"><span class="em">CODE 5</span>접속 로깅 — FDS의 기초</h2>
+
+<!--CODE:config/app.php:FN:clientIp-->
+<!--CODE:config/app.php:FN:logAccess-->
+
+<div class="read">
+<div class="rt">🔍 줄 해석</div>
+<ul>
+<li><code>HTTP_X_FORWARDED_FOR</code>를 먼저 봅니다 — 프록시·로드밸런서를 거치면 <code>REMOTE_ADDR</code>가 프록시 IP가 되기 때문입니다.</li>
+<li>그 헤더는 <code>클라이언트, 프록시1, 프록시2</code> 형태의 <b>체인</b>이라 <code>explode(',')[0]</code>으로 <b>첫 IP</b>만 씁니다.</li>
+<li><code>substr(..., 0, 45)</code> — IPv6 최대 길이가 45자. 컬럼 크기에 맞춰 자릅니다.</li>
+<li><code>@mysqli_prepare</code>가 실패하면 <b><code>ensureOpsSchema()</code>를 부르고 다시 시도</b>합니다. 테이블이 아직 없는 첫 실행에서도 알아서 복구됩니다.</li>
+<li>로깅 실패가 <b>로그인 자체를 막으면 안 되므로</b> <code>@</code>로 에러를 삼킵니다. 부가 기능이 본 기능을 죽이지 않게 하는 패턴입니다.</li>
+</ul>
+</div>
+
+
+<!-- ============================================================ -->
+<h2 class="sec" id="f6"><span class="em">CODE 6</span>KIS 토큰 발급과 캐싱</h2>
+<p class="lead">외부 API는 <b>호출 횟수 자체가 자원</b>입니다. 이 파일이 그걸 아끼는 법을 보여줍니다.</p>
+
+<!--CODE:config/kis_api.php:FN:getKisAccessToken-->
+
+<div class="read">
+<div class="rt">🔍 줄 해석</div>
+<ul>
+<li><b>왜 캐싱하나</b>: 요청마다 새 토큰을 발급받다가 <b>발급 제한에 걸렸던 적</b>이 있습니다(1편 트러블슈팅 사례 5).</li>
+<li>캐시 파일에 <code>expire_at</code>을 같이 저장하고, 아직 안 지났으면 <b>네트워크를 아예 타지 않고</b> 재사용합니다.</li>
+<li><b>23시간</b>으로 잡은 이유: 실제 만료는 24시간인데, 딱 맞추면 "쓰려는 순간 막 만료된" 경우가 생깁니다. <b>여유(safety margin)</b>를 둔 것입니다.</li>
+<li><code>openapivts...:29443</code> — <b>vts = 모의투자</b> 도메인입니다. 실전 도메인과 주소가 다릅니다.</li>
+<li>발급 실패 시 <code>throw</code> — 토큰 없이 뒤 로직을 진행해도 어차피 다 실패하므로 여기서 끊습니다.</li>
+<li>⚠️ <b>캐시 파일 <code>token_cache.json</code>이 노출되면 남이 우리 토큰을 그대로 씁니다.</b> 그래서 <code>config/.htaccess</code>가 폴더째 막고 있습니다(CODE 2).</li>
+</ul>
+</div>
+
+
+<!-- ============================================================ -->
+<h2 class="sec" id="f7"><span class="em">CODE 7</span>시세 API 공통 헬퍼</h2>
+<p class="lead">KIS 시세 API 6종이 전부 이 함수 하나를 거칩니다. <b>같은 코드를 여섯 번 쓰지 않으려고</b> 만든 것입니다.</p>
+
+<!--CODE:config/kis_api.php:FN:kisQuotationGet-->
+
+<div class="read">
+<div class="rt">🔍 줄 해석</div>
+<ul>
+<li>매개변수가 <code>$path, $trId, $params</code> 셋뿐입니다. KIS API는 <b>주소·tr_id·파라미터만 다르고 나머지(헤더·인증·타임아웃)는 전부 같기</b> 때문에 그 공통부를 여기 모았습니다.</li>
+<li><code>tr_id</code>가 "무슨 기능을 부를지"를 고르는 스위치입니다. <code>FHKST01010100</code>=현재가, <code>FHKST01010200</code>=호가, <code>FHKST03010100</code>=일봉.</li>
+<li><code>CURLOPT_TIMEOUT => 10</code> — 응답이 10초를 넘으면 포기합니다. 없으면 <b>한 종목이 멈추면 전체가 멈춥니다</b>.</li>
+<li><b><code>EGW00201</code> 재시도가 핵심</b>: KIS의 "초당 호출 제한 초과" 에러입니다. 0.7초 쉬고 <b>자기 자신을 다시 호출</b>(재귀)합니다.</li>
+<li><code>$retryCount &lt; 3</code> — 재귀에 반드시 <b>탈출 조건</b>이 필요합니다. 없으면 서버가 계속 거부할 때 무한 재귀로 죽습니다.</li>
+</ul>
+</div>
+
+
+<!-- ============================================================ -->
+<h2 class="sec" id="f8"><span class="em">CODE 8</span>일봉 API — 100행의 벽</h2>
+<p class="lead">"3개월/1년/2년 탭"이 실제로 동작하게 만든 함수입니다. <b>실제로 호출해보고 알아낸 제약</b>이 설계를 결정했습니다.</p>
+
+<!--CODE:config/kis_api.php:FN:getDailyChart-->
+
+<div class="read">
+<div class="rt">🔍 줄 해석</div>
+<ul>
+<li><code>FID_ORG_ADJ_PRC = '0'</code> — <b>수정주가</b>를 켭니다. 액면분할이 있었던 종목은 이걸 안 켜면 과거 가격이 <b>계단처럼 튑니다</b>.</li>
+<li><code>rt_cd !== '0'</code>이면 빈 배열 — KIS는 실패해도 HTTP 200을 주므로 <b>본문의 결과코드를 봐야</b> 합니다.</li>
+<li><code>strlen($d) !== 8</code> · <code>$close &lt;= 0</code> — 휴장일이나 미체결 행이 빈 값으로 섞여 옵니다. 그대로 저장하면 차트에 <b>0원짜리 봉</b>이 찍힙니다.</li>
+<li>마지막 <code>usort</code> — <b>KIS는 최신 날짜부터 역순</b>으로 줍니다. 차트는 시간 오름차순이어야 하므로 뒤집습니다.</li>
+</ul>
+</div>
+
+<div class="warn-box">
+<b>🔑 실호출로 알아낸 제약</b> — 한 번 호출에 <b>정확히 100행</b>이고, 요청 구간을 아무리 길게 줘도 <b>끝 날짜 기준 최근 100행만</b> 줍니다.
+그래서 2년치를 받으려면 <b>끝 날짜를 뒤로 밀어가며 5번 반복</b>해야 합니다. 그 반복이 <code>cron/backfill_daily.php</code>입니다(CODE 24).<br>
+문서만 읽고 "구간을 넓게 주면 되겠지"라고 짰다면 조용히 100행만 받고 끝났을 겁니다. <b>외부 API는 실제로 불러봐야 압니다.</b>
+</div>
+
+
+<!-- ============================================================ -->
+<h2 class="sec" id="f9"><span class="em">CODE 9</span>실주문과 해시키</h2>
+<p class="lead">지금 사이트의 매매는 <b>우리 DB에서만</b> 일어나지만, KIS 모의투자 계좌로 <b>진짜 주문</b>을 내는 경로도 만들어져 있습니다.</p>
+
+<!--CODE:config/kis_api.php:FN:getHashKey-->
+
+<div class="read">
+<div class="rt">🔍 줄 해석</div>
+<ul>
+<li>주문 <b>본문을 먼저 KIS에 보내</b> 서명값(HASH)을 받아옵니다. 그 값을 실제 주문 요청의 헤더에 실어 보냅니다.</li>
+<li>목적은 <b>위변조 방지</b> — 중간에서 수량이나 종목이 바뀌면 해시가 안 맞아 거부됩니다.</li>
+</ul>
+</div>
+
+<!--CODE:config/kis_api.php:FN:placeStockOrder-->
+
+<div class="read">
+<div class="rt">🔍 줄 해석</div>
+<ul>
+<li><code>$trId = ($orderType === 'buy') ? 'VTTC0802U' : 'VTTC0801U'</code> — <b>VT</b>로 시작하면 모의투자입니다. 실전은 다른 코드입니다.</li>
+<li><code>ORD_DVSN = "01"</code> = 시장가. 그래서 <code>ORD_UNPR</code>(주문단가)는 <code>"0"</code>입니다 — 시장가는 가격을 지정하지 않습니다.</li>
+<li>숫자를 <b>문자열로</b> 보냅니다(<code>(string)$quantity</code>). KIS 규격이 문자열을 요구합니다.</li>
+<li><b>재시도 판단이 정교합니다</b>: ⓐ 네트워크 오류 ⓑ 초당 제한(EGW00201) ⓒ 응답 파싱 실패 — 이 셋만 재시도하고, "잔고 부족" 같은 <b>논리적 실패는 재시도하지 않습니다</b>. 재시도해봐야 같은 답이니까요.</li>
+<li><b>주문은 최대 2회만</b> 재시도합니다(시세 조회는 3회). 돈이 움직이는 요청은 <b>중복 체결 위험</b>이 있어 더 보수적으로 잡았습니다.</li>
+</ul>
+</div>
+
+
+<!-- ============================================================ -->
+<h2 class="sec" id="f10"><span class="em">CODE 10</span>오픈 리다이렉트 방어</h2>
+<p class="lead">"로그인하면 원래 보던 페이지로 돌려보내기"는 편의 기능인데, <b>잘못 만들면 피싱 도구</b>가 됩니다.</p>
+
+<!--CODE:user/func.php:FN:requireUserLogin-->
+<!--CODE:user/func.php:FN:safeNext-->
+
+<div class="read">
+<div class="rt">🔍 줄 해석</div>
+<ul>
+<li><code>requireUserLogin()</code>은 <b>서버측 게이트</b>입니다. 화면에서 메뉴를 숨기는 것만으론 주소를 직접 치면 들어가집니다.</li>
+<li>돌아갈 주소를 <code>?next=</code>에 담아 로그인 페이지로 보냅니다.</li>
+<li><b>위험</b>: 그 값을 그대로 믿고 이동하면 공격자가 <code>?next=//evil.com</code>을 심어 <b>우리 사이트를 거쳐 피싱 사이트로</b> 보낼 수 있습니다. 사용자는 우리 도메인에서 시작했으니 의심하지 않습니다.</li>
+<li><code>safeNext()</code>의 정규식 <code>^[A-Za-z0-9_]+\.php(\?...)?$</code> — <b>같은 폴더의 .php 파일명만</b> 통과시킵니다. <code>//</code>, <code>http://</code>, <code>../</code>가 전부 걸러집니다.</li>
+<li><b>허용 목록(whitelist) 방식</b>입니다 — "나쁜 걸 막는" 대신 "좋은 것만 통과". 새로운 공격 패턴이 나와도 안전합니다.</li>
+</ul>
+</div>
+
+
+<!-- ============================================================ -->
+<h2 class="sec" id="f11"><span class="em">CODE 11</span>로그인</h2>
+
+<!--CODE:user/login_process.php-->
+
+<div class="read">
+<div class="rt">🔍 줄 해석</div>
+<ul>
+<li><span class="lnum">4</span> <code>session_name('USER_SESSION')</code>이 안에서 실행됩니다 — <b>관리자 세션과 이름이 달라</b> 서로 섞이지 않습니다.</li>
+<li><span class="lnum">5</span> CSRF 검사. 실패하면 여기서 끝납니다.</li>
+<li><span class="lnum">17~20</span> <b>유저가 없을 때와 비밀번호가 틀릴 때의 응답이 같습니다</b>(<code>error=1</code>). 나누면 "이 이메일은 가입돼 있다"는 정보가 새어나갑니다(계정 열거 공격).</li>
+<li><code>password_verify()</code> — 저장된 해시와 비교합니다. <b>원문 비밀번호는 DB 어디에도 없습니다.</b></li>
+<li><span class="lnum">23~26</span> 정지 계정 차단. 로그인 자체를 막습니다.</li>
+<li><span class="lnum">30~31</span> 세션에 <code>user_id</code>를 넣는 순간부터 "로그인 상태"입니다. <b>브라우저에는 열쇠(세션 ID)만</b> 가고 내용은 서버에 남습니다.</li>
+<li><span class="lnum">34</span> 접속 로그 기록 — 실패해도 로그인은 진행됩니다(CODE 5).</li>
+<li><span class="lnum">36</span> <code>safeNext</code>로 검증된 주소로만 이동. <span class="lnum">11</span>에서 이미 검증해뒀습니다.</li>
+</ul>
+</div>
+
+
+<!-- ============================================================ -->
+<h2 class="sec" id="f12"><span class="em">CODE 12</span>매수 — 트랜잭션의 핵심</h2>
+<p class="lead"><b>이 프로젝트에서 가장 중요한 함수입니다.</b> 돈이 움직이는 모든 규칙이 여기 있습니다.</p>
+
+<!--CODE:user/func.php:FN:processBuy-->
+
+<div class="read">
+<div class="rt">🔍 줄 해석</div>
+<ul>
+<li><b>진입부 2차 검증</b> — 화면에서 이미 걸렀는데도 다시 봅니다. <b>브라우저에서 오는 값은 전부 조작 가능</b>하기 때문입니다. 실제로 음수 수량 버그가 있었습니다.</li>
+<li><code>mysqli_begin_transaction()</code> — 여기서부터 <code>commit</code>까지는 <b>전부 성공하거나 전부 취소</b>됩니다.</li>
+<li><b><code>FOR UPDATE</code>가 이 함수의 심장입니다.</b> 잔고 행을 <b>잠급니다</b>. 이게 없으면:
+<div class="diagram">[FOR UPDATE 없을 때 — 잔고 100만원]
+  요청A: 잔고 읽음(100만) ──┐
+  요청B: 잔고 읽음(100만) ──┤  둘 다 "충분하다"고 판단
+  요청A: 100만 차감 → 0    ─┘
+  요청B: 100만 차감 → -100만   ⚠️ 잔고가 마이너스!
+
+[FOR UPDATE 있을 때]
+  요청A: 잔고 읽고 잠금 → 차감 → commit(잠금 해제)
+  요청B: (A가 끝날 때까지 대기) → 잔고 0 읽음 → "부족합니다" ✅</div></li>
+<li><b>순서가 의도적입니다</b>: 잔고 확인 → 차감 → 보유 반영 → 주문 기록. 가장 <b>실패 가능성이 높은 것(잔고)</b>을 맨 앞에 둬서 헛일을 줄입니다.</li>
+<li><b>평균단가 재계산</b>: <code>(기존수량×기존평단 + 신규수량×신규가) ÷ 총수량</code>. 이걸 틀리면 수익률이 전부 틀어집니다.</li>
+<li>보유 행도 <code>FOR UPDATE</code>로 잠급니다 — 같은 종목을 동시에 사면 평단이 꼬입니다.</li>
+<li><code>catch</code>에서 <code>rollback()</code> 후 <b>예외를 다시 던집니다</b>(<code>throw $e</code>). 되돌리는 건 여기 책임이고, <b>사용자에게 뭐라고 말할지는 호출한 쪽 책임</b>이기 때문입니다.</li>
+</ul>
+</div>
+
+
+<!-- ============================================================ -->
+<h2 class="sec" id="f13"><span class="em">CODE 13</span>매도</h2>
+
+<!--CODE:user/func.php:FN:processSell-->
+
+<div class="read">
+<div class="rt">🔍 줄 해석</div>
+<ul>
+<li>구조는 매수와 거울처럼 같습니다. <b>다른 점 세 가지</b>만 보면 됩니다.</li>
+<li><b>① 검증 대상이 다름</b> — 매수는 "돈이 충분한가", 매도는 "주식이 충분한가".</li>
+<li><b>② 0이 되면 행을 삭제</b> — <code>quantity=0</code>인 행을 남기지 않고 <code>DELETE</code>합니다. 보유 목록이 깔끔해집니다.
+<br>다만 <b>부작용</b>이 있습니다: 전량 매도하면 그 종목의 평단 기록이 사라집니다. 그래서 과거 수익률은 따로 복원해야 합니다(CODE 14).</li>
+<li><b>③ 평단을 갱신하지 않음</b> — 매도는 수량만 줄입니다. 평단은 "얼마에 샀나"이므로 파는 행위로 바뀌지 않습니다. <b>초보가 자주 틀리는 부분</b>입니다.</li>
+<li>주석에 남아 있듯, 음수 수량 매도는 <b>보유수량을 늘리고 현금을 깎는 역버그</b>가 됩니다. 그래서 진입부 검증이 필수입니다.</li>
+</ul>
+</div>
+
+
+<!-- ============================================================ -->
+<h2 class="sec" id="f14"><span class="em">CODE 14</span>과거 평단 복원 — 없는 데이터를 되살리기</h2>
+<p class="lead">"3개월 전에 판 그 주식, 몇 % 먹었지?"에 답하는 함수입니다. <b>그 답은 DB에 없습니다.</b></p>
+
+<div class="bad">
+<b>문제</b>: <code>holdings.avg_price</code>는 <b>'지금' 평단</b>이고, 전량 매도하면 <b>행 자체가 사라집니다</b>.
+그래서 "그때 그 시점의 평단"은 DB 어디에도 없습니다.
+</div>
+
+<!--CODE:user/func.php:FN:getAutoTradeHistory-->
+
+<div class="read">
+<div class="rt">🔍 줄 해석</div>
+<ul>
+<li><b>해법 = 재생(replay)</b>. <code>orders</code> 테이블에는 모든 주문이 <b>시간순으로 남아</b> 있습니다. 그걸 처음부터 다시 훑으면서 <code>processBuy</code>와 <b>같은 방식으로</b> 평단을 다시 쌓습니다.</li>
+<li><code>ORDER BY o.created_at ASC, o.id ASC</code> — <b>반드시 오래된 순</b>으로 읽어야 재생이 성립합니다. <code>id</code>를 2차 정렬로 둔 이유는 같은 초에 들어온 주문의 순서를 확정하기 위해서입니다.</li>
+<li><code>$book[종목] = ['qty'=>보유수량, 'cost'=>매입원가 합계]</code> — 이게 재생용 장부입니다.</li>
+<li><b>매수 행</b>: 장부에 더하고, 표시 수익률은 <b>"매수가 대비 현재가"</b>로 냅니다. 아직 판 게 아니라 손익이 확정되지 않았기 때문입니다(<code>rate_basis='current'</code>).</li>
+<li><b>매도 행</b>: 그 시점 평단 = <code>cost ÷ qty</code>로 구하고, <b>실현수익률</b>을 계산합니다(<code>rate_basis='realized'</code>). 두 종류를 <b>구분해서 표시</b>하는 게 정직한 UI입니다.</li>
+<li><code>min($qty, $book[$code]['qty'])</code> — 데이터가 꼬여 보유보다 많이 파는 기록이 있어도 <b>음수로 내려가지 않게</b> 방어합니다.</li>
+<li>마지막에 <code>array_reverse</code>로 <b>최신이 위로</b> 오게 뒤집고 N건만 자릅니다. 재생은 오래된 순이어야 하지만 <b>보여주는 건 최신 순</b>이라, 순서를 두 번 뒤집는 겁니다.</li>
+</ul>
+</div>
+
+<div class="good">
+<b>배울 점</b> — "그 값을 저장해두지 않았다"고 해서 포기할 필요가 없습니다.
+<b>변경 이력이 남아 있으면 어느 시점의 상태든 재구성할 수 있습니다.</b> (이벤트 소싱과 같은 발상입니다)
+</div>
+
+
+<!-- ============================================================ -->
+<h2 class="sec" id="f15"><span class="em">CODE 15</span>스키마 자동 보강 — MySQL엔 없는 문법</h2>
+
+<!--CODE:user/func.php:FN:ensureAutoTradeSchema-->
+
+<div class="read">
+<div class="rt">🔍 줄 해석</div>
+<ul>
+<li><code>static $done</code> — <b>한 요청에서 여러 번 불려도 확인은 한 번만</b>. 페이지마다 <code>information_schema</code> 조회를 반복하면 낭비입니다.</li>
+<li><b>왜 <code>information_schema</code>를 뒤지나</b>: <code>ADD COLUMN IF NOT EXISTS</code>는 <b>MariaDB 전용</b>이라 MySQL 8.4에선 문법 에러입니다. 그래서 <b>먼저 있는지 물어보고</b> 없을 때만 ALTER 합니다.</li>
+<li><code>orders.is_auto</code> — 0=사람, 1=자동매매. <b>기능을 만들기 전에 컬럼부터</b> 넣어뒀습니다. 나중에 로직이 붙을 때 프론트와 쿼리를 다시 안 고쳐도 되게 하기 위해서입니다.</li>
+<li>인덱스 <code>(user_id, is_auto, created_at)</code> — "내 자동매매 주문을 최신순으로"라는 <b>조회 형태에 맞춰</b> 컬럼 순서를 정했습니다. 순서가 다르면 인덱스를 못 씁니다.</li>
+<li><code>ON DELETE CASCADE</code> — 회원이 삭제되면 설정도 같이 사라집니다. 고아 데이터가 안 남습니다.</li>
+</ul>
+</div>
+
+
+<!-- ============================================================ -->
+<h2 class="sec" id="f16"><span class="em">CODE 16</span>차트 규격표 — 한 눈에 보이는 설계</h2>
+<p class="lead">차트의 모든 동작이 <b>이 표 하나</b>에서 결정됩니다.</p>
+
+<!--CODE:user/func.php:FN:chartRangeSpec-->
+
+<div class="read">
+<div class="rt">🔍 줄 해석</div>
+<ul>
+<li><code>src</code> = 어느 테이블에서 읽을지, <code>bucket</code> = 봉 하나가 몇 초짜리인지, <code>days</code> = 며칠 전부터 볼지.</li>
+<li><b>기간이 길수록 봉이 굵습니다.</b> 그래서 어느 탭을 눌러도 캔들이 <b>수백 개</b>로 유지됩니다 — "2년 보기"가 "오늘 보기"보다 무겁지 않은 이유입니다.</li>
+<li><b><code>1M</code>이 <code>daily</code>인 게 2026-08-07 수정 사항</b>입니다. 원래 30분봉이었는데, 분 데이터는 수집 시작일(2026-07-20)부터만 있어서 <b>"1개월"을 눌러도 18일치만</b> 나왔습니다. 일봉은 2024년부터 다 있는데 안 쓰고 있었던 겁니다.</li>
+<li><code>5Y</code>는 <b>버튼에서 뺐지만 표에는 남겨뒀습니다</b> — 옛 링크나 북마크가 죽지 않게 하려는 것입니다. 나중에 5년치를 백필하면 <b>버튼만 되살리면</b> 됩니다.</li>
+<li><code>$map[$key] ?? $map['1D']</code> — 모르는 값이 오면 <b>에러 대신 1D로 떨어집니다</b>. 외부 입력에 대해 "안전한 기본값"을 두는 패턴입니다.</li>
+</ul>
+</div>
+
+<div class="warn-box">
+<b>⚠️ 이 표를 고치면 반드시 같이 고쳐야 하는 곳이 2군데 더 있습니다</b> (프론트, CODE 20 참고)<br>
+① <code>isDailyRange()</code> — 빠뜨리면 시:분 축이 켜진 채라 <b>모든 봉이 00:00으로</b> 찍힙니다.<br>
+② <code>RANGE_BUCKET</code> — 일봉 구간을 남겨두면 실시간 캔들(숫자)과 일봉(문자열)이 섞여 <b>봉이 엉뚱한 자리에</b> 떨어집니다.
+</div>
+
+
+<!-- ============================================================ -->
+<h2 class="sec" id="f17"><span class="em">CODE 17</span>분봉 조회 — 자가 치유</h2>
+<p class="lead">수집기가 며칠 꺼져 있었어도 <b>차트에 구멍이 안 나게</b> 만드는 설계입니다.</p>
+
+<!--CODE:user/func.php:FN:getCandleData-->
+<!--CODE:user/func.php:FN:getMinuteCandles-->
+
+<div class="read">
+<div class="rt">🔍 줄 해석</div>
+<ul>
+<li><code>getCandleData</code>는 <b>교통정리만</b> 합니다 — 규격표를 보고 일봉이면 일봉 함수로, 분봉이면 분봉 함수로 보냅니다. 이렇게 나눠두면 각 함수가 한 가지 일만 하게 됩니다.</li>
+<li><b>①번 쿼리</b>: <code>FROM_UNIXTIME(FLOOR(UNIX_TIMESTAMP(ts) / ?) * ?)</code> — 이게 <b>버킷 만들기</b>입니다. 300으로 나눠 내림하고 다시 300을 곱하면 <b>5분 단위로 뭉갠 시각</b>이 나옵니다. 같은 값이 된 행들을 <code>GROUP BY</code>로 묶으면 5분봉이 됩니다.</li>
+<li>시가는 <code>GROUP_CONCAT(... ORDER BY ts ASC)</code>의 <b>첫 값</b>, 종가는 <code>ORDER BY ts DESC</code>의 첫 값. MySQL엔 "그룹의 첫 값"을 뽑는 집계함수가 없어서 쓰는 <b>관용구</b>입니다.</li>
+<li><b>②번이 자가 치유의 핵심</b>: 분봉 테이블이 <b>어디까지 있는지</b>(<code>MAX(ts)</code>) 확인하고, <b>그 뒤 구간만</b> 원시 로그로 즉석 집계합니다.</li>
+<li><code>created_at &gt; ?</code> — 경계를 <b>초과(&gt;)</b>로 잡습니다. <code>&gt;=</code>였다면 마지막 분이 양쪽에 다 들어가 <b>중복 캔들</b>이 생깁니다. 부등호 하나의 차이입니다.</li>
+<li>마지막 병합: <code>$merged[$r['time']] = $r</code> — <b>같은 시각이면 나중 것이 덮어씁니다</b>. 배열 순서상 원시 로그(더 최신)가 뒤에 오므로 그쪽이 이깁니다.</li>
+<li><code>ksort</code>로 시각 순 정렬 후 <code>array_values</code>로 <b>키를 버리고 순서 배열로</b> 만듭니다. JSON으로 나갈 때 객체가 아니라 배열이 되게 하려는 것입니다.</li>
+</ul>
+</div>
+
+<div class="note">
+<b>실측으로 본 자가 치유의 대가</b><br>
+분봉이 하루 멈춰 있을 때 1주 탭이 <b>4.3초</b>까지 느려졌다가, 정상 상태에서는 <b>46ms</b>였습니다.
+즉석 집계 구간이 길수록 느려지는 것입니다.<br>
+👉 <b>차트가 갑자기 느려지면 "수집기가 죽었나?"를 먼저 의심하면 됩니다.</b> 성능이 곧 상태 표시등 역할을 합니다.
+</div>
+
+
+<!-- ============================================================ -->
+<h2 class="sec" id="f18"><span class="em">CODE 18</span>일봉 조회와 기준 시각</h2>
+
+<!--CODE:user/func.php:FN:getDailyCandles-->
+
+<div class="read">
+<div class="rt">🔍 줄 해석</div>
+<ul>
+<li>일봉은 <b>가공이 없습니다</b> — KIS가 이미 완성된 일봉을 주므로 그대로 읽습니다.</li>
+<li><b>시간축이 문자열입니다</b>(<code>'2026-08-07'</code>). 유닉스 초가 아닙니다. lightweight-charts는 문자열을 받으면 <b>business day</b>로 알아듣고 <b>주말·휴장일을 알아서 건너뜁니다</b>. 숫자를 주면 주말이 빈칸으로 벌어집니다.</li>
+<li><code>ensureCandle1dTable()</code>을 먼저 부릅니다 — 테이블이 없어도 알아서 만들어집니다.</li>
+</ul>
+</div>
+
+<!--CODE:user/func.php:FN:getRangeStart-->
+
+<div class="read">
+<div class="rt">🔍 줄 해석</div>
+<ul>
+<li><b>이 짧은 함수가 타임존 사고를 막는 장치입니다.</b> PHP의 <code>date()</code>로 시작 시각을 만들면 안 됩니다 — PHP는 UTC, DB 세션은 KST라 <b>9시간이 어긋나</b> '오늘'을 통째로 놓칩니다.</li>
+<li>그래서 <b>항상 DB에게 물어봅니다</b>: <code>SELECT CURDATE()</code> / <code>SELECT DATE_SUB(NOW(), ...)</code>.</li>
+<li><code>$days &lt;= 1</code>일 때만 <b>'오늘 00:00부터'</b>로 다르게 처리합니다. "1일 보기"는 <b>지난 24시간</b>이 아니라 <b>오늘 장</b>을 보는 것이기 때문입니다. 사용자가 기대하는 의미에 맞춘 것입니다.</li>
+</ul>
+</div>
+
+
+<!-- ============================================================ -->
+<h2 class="sec" id="f19"><span class="em">CODE 19</span>조용히 틀리는 버그</h2>
+<p class="lead">이 프로젝트에서 <b>가장 위험했던 버그</b>가 이 함수 안에 있었습니다. 에러가 하나도 안 났습니다.</p>
+
+<!--CODE:user/func.php:FN:groupCandleRows-->
+
+<div class="read">
+<div class="rt">🔍 줄 해석</div>
+<ul>
+<li><b><code>group_concat_max_len</code> 기본값은 1024바이트</b>입니다. 30분 버킷이면 한 칸에 값이 180개까지 들어가 그 한도를 넘습니다.</li>
+<li>넘으면 MySQL이 <b>조용히 잘라냅니다</b> — 에러도, 경고도 없습니다. 그런데 우리는 그 문자열의 <b>첫 값을 시가로</b> 쓰고 있으니, 잘린 결과로 <b>시가·종가가 틀어진 캔들</b>이 만들어집니다.</li>
+<li><code>static $raised</code> — 세션 설정이라 <b>연결당 한 번만</b> 걸면 됩니다. 캔들 조회마다 쿼리를 날리지 않으려는 것입니다.</li>
+<li><code>max(0, (int)$row['v'])</code> — 거래량 <b>음수 방어</b>. 누적거래량은 날짜가 바뀌면 0으로 리셋되는데, 그 경계를 걸친 버킷에서는 <code>MAX-MIN</code>이 음수가 될 수 있습니다.</li>
+<li><code>chartTs()</code>로 시각을 유닉스 초로 바꿉니다 — 아래에서 설명합니다.</li>
+</ul>
+</div>
+
+<!--CODE:user/func.php:FN:chartTs-->
+
+<div class="read">
+<div class="rt">🔍 줄 해석</div>
+<ul>
+<li><code>strtotime($s . ' UTC')</code> — <b>일부러 'UTC'를 붙입니다.</b></li>
+<li>우리 DB 시각은 전부 <b>KST 벽시계 값</b>이고, lightweight-charts는 타임스탬프를 <b>UTC로 해석해</b> 라벨을 찍습니다. 그래서 "KST 값을 UTC인 척" 넘겨야 화면에 09:00이 09:00으로 나옵니다.</li>
+<li>' UTC'를 안 붙이면 <b>PHP 기본 타임존에 따라 결과가 달라집니다</b> — 서버 설정이 바뀌면 차트가 통째로 밀립니다. 고정해두는 게 안전합니다.</li>
+</ul>
+</div>
+
+<div class="bad">
+<b>이 축 정렬이 낳은 또 다른 버그</b> — 서버 캔들 축은 "KST를 UTC로 읽은 값"인데,
+웹소켓이 주는 <code>created_at</code>은 <b>진짜 UTC</b>(<code>toISOString()</code>)였습니다.
+정확히 <b>9시간</b>이 어긋나서 실시간 캔들이 <code>slot &gt; last.time</code> 조건에 걸려 <b>전부 버려졌습니다</b>. 에러 없이요.
+→ 프론트에서 <code>KST_OFFSET = 9*3600</code>을 더해 해결했습니다.
+</div>
+
+<div class="good">
+<b>검증 방법</b> — 이런 버그는 "잘 되는 것처럼 보입니다". 그래서 눈으로 확인하지 않고,
+분봉 <b>41,638개를 원본 틱과 전수 대조</b>해 시가·고가·저가·종가·건수 <b>불일치 0</b>을 확인했습니다.
+</div>
+
+
+<!-- ============================================================ -->
+<h2 class="sec" id="f20"><span class="em">CODE 20</span>차트 데이터 창구와 프론트</h2>
+
+<!--CODE:user/get_stock_chart.php-->
+
+<div class="read">
+<div class="rt">🔍 줄 해석</div>
+<ul>
+<li><b>로그인을 요구하지 않습니다</b> — 홈·상세·차트는 공개 열람, 매수/매도/관심등록만 로그인이라는 방침 때문입니다. 예전에 이게 로그인을 요구해서 <b>비로그인 상세에서 차트가 안 뜨던</b> 버그가 있었습니다.</li>
+<li><code>preg_match('/^[0-9A-Z]{6}$/', $stockCode)</code> — <b>쿼리를 날리기 전에</b> 형식을 검증합니다. 이상한 값이면 DB를 아예 안 건드리고 빈 배열을 돌려줍니다.</li>
+<li>파일이 20줄뿐인 이유: <b>로직이 전부 <code>func.php</code>에 있기 때문</b>입니다. 창구 파일은 "받고 검증하고 넘기고 응답"만 합니다.</li>
+</ul>
+</div>
+
+<h3 class="sub">프론트 — 기간 전환</h3>
+
+<!--CODE:user/stock_detail.php:FN:loadChart-->
+
+<div class="read">
+<div class="rt">🔍 줄 해석</div>
+<ul>
+<li><b><code>loadSeq</code> 연타 가드가 핵심입니다.</b> 탭을 빠르게 여러 번 누르면 응답이 <b>보낸 순서대로 돌아오지 않습니다</b>. 2년(느림)을 누르고 1일(빠름)을 누르면, 나중에 도착한 2년 데이터가 <b>1일 화면을 덮어씁니다</b>.
+<br>→ 요청마다 번호를 매기고, 응답이 왔을 때 <code>seq !== loadSeq</code>면 <b>그 응답을 버립니다</b>.</li>
+<li><code>chart.applyOptions({ timeScale: { timeVisible: !isDailyRange() } })</code> — 일봉이면 <b>시:분 축을 끕니다</b>. 안 끄면 모든 봉이 00:00으로 찍힙니다.</li>
+<li><code>applyOptions</code>는 <b>부분 갱신</b>이라 여기서 지정하지 않은 <code>fixLeftEdge</code> 같은 옵션은 그대로 유지됩니다.</li>
+<li><code>finally</code>에서 로딩 표시를 지웁니다 — 성공하든 실패하든 반드시 실행됩니다.</li>
+</ul>
+</div>
+
+<h3 class="sub">프론트 — 실시간 캔들 갱신</h3>
+
+<!--CODE:user/stock_detail.php:FN:updateLastCandle-->
+
+<div class="read">
+<div class="rt">🔍 줄 해석</div>
+<ul>
+<li><code>const bucketSec = RANGE_BUCKET[currentRange]; if (!bucketSec) return;</code> — <b>일봉 구간이면 아무것도 안 합니다.</b> <code>RANGE_BUCKET</code>에 일봉 항목이 없는 게 곧 "실시간 갱신 안 함"이라는 뜻입니다. <b>없음(undefined)을 스위치로 쓰는</b> 방식입니다.</li>
+<li><code>Math.floor((timestamp + KST_OFFSET) / bucketSec) * bucketSec</code> — 서버와 <b>같은 방식으로 버킷</b>을 계산합니다. <code>KST_OFFSET</code>이 바로 9시간 버그의 해결책입니다.</li>
+<li><code>last.time === slot</code>이면 <b>같은 봉 갱신</b>(고가·저가·종가만), 새 칸이면 <b>새 봉 추가</b>.</li>
+<li><code>else { return; }</code> — <b>이미 지나간 칸</b>의 뒤늦은 체결은 무시합니다. 과거 봉을 건드리면 차트가 튑니다.</li>
+</ul>
+</div>
+
+
+<!-- ============================================================ -->
+<h2 class="sec" id="f21"><span class="em">CODE 21</span>1분봉 누적기 — 전체</h2>
+<p class="lead">99줄짜리 파일 하나가 <b>"저장은 줄이고 정확도는 안 줄인다"</b>를 실현합니다. 순수 함수뿐이라 웹소켓 없이 테스트할 수 있습니다.</p>
+
+<!--CODE:stock-ws/candles.js-->
+
+<div class="read">
+<div class="rt">🔍 줄 해석 — <code>minuteKeyKst</code></div>
+<ul>
+<li><b>로컬 시간대를 아예 안 씁니다.</b> <code>new Date(ms + 9시간)</code>으로 <b>직접 9시간을 더한 뒤</b> <code>getUTCHours()</code> 같은 UTC 계열로 읽습니다.</li>
+<li>왜? <code>getHours()</code>는 <b>실행하는 PC의 시간대</b>를 따릅니다. 형 PC(KST)와 서버(UTC)에서 답이 달라집니다. 이 방식은 <b>어디서 돌려도 같은 값</b>이 나옵니다.</li>
+<li><code>padStart(2,'0')</code>으로 자릿수를 맞춰 <code>'2026-08-07 09:05:00'</code> 형태를 만듭니다. DB의 <code>DATETIME</code>과 같은 모양이라 그대로 넣을 수 있습니다.</li>
+</ul>
+</div>
+
+<div class="read">
+<div class="rt">🔍 줄 해석 — <code>accumulateCandle</code></div>
+<ul>
+<li><b>이상치 방어가 맨 앞</b>: <code>!Number.isFinite(price) || price &lt;= 0</code>. KIS가 드물게 0이나 NaN을 흘리는데, 그게 <code>low_p</code>로 굳으면 <b>차트가 바닥까지 찍힙니다</b>. 들어오는 즉시 버립니다.</li>
+<li>키가 <code>종목코드 + '|' + 분</code>입니다. 종목이 섞이지 않고, 분이 바뀌면 자동으로 새 캔들이 됩니다.</li>
+<li><b>첫 체결이 시가</b>: <code>if (!c)</code>일 때만 <code>o: price</code>를 설정합니다. 이후엔 절대 안 건드립니다.</li>
+<li>고가·저가는 비교해서 갱신, <b>종가는 매번 덮어씀</b> — 마지막에 덮인 값이 곧 그 분의 마지막 체결가가 됩니다. 별도 처리가 필요 없습니다.</li>
+<li><code>if (vol &gt; c.vol) c.vol = vol</code> — 누적거래량은 <b>단조 증가</b>해야 합니다. 되돌아가는 값은 <b>패킷 순서가 뒤바뀐 것</b>이므로 무시합니다.</li>
+<li><b><code>dVol += q</code>가 중요합니다</b> — 건별 체결량을 <b>그대로 더합니다</b>. 원시 로그로 계산할 때처럼 <code>MAX-MIN</code> 뺄셈을 할 필요가 없어서 <b>분 경계 오차가 없습니다</b>.</li>
+</ul>
+</div>
+
+<div class="read">
+<div class="rt">🔍 줄 해석 — <code>flushCandles</code></div>
+<ul>
+<li><code>if (c.dTicks &gt; 0)</code> — <b>변화가 있었던 것만</b> 내보냅니다. 조용한 종목은 DB를 안 건드립니다.</li>
+<li>내보낸 뒤 <code>dVol = 0; dTicks = 0;</code> — <b>델타 리셋</b>. 이게 없으면 DB에서 <code>ticks = ticks + VALUES(ticks)</code>로 더할 때 <b>같은 값을 반복해서 더합니다</b>.</li>
+<li><code>if (c.ts !== currentKey) store.delete(id)</code> — <b>지나간 분은 Map에서 제거</b>합니다. 안 하면 하루 종일 캔들이 쌓여 <b>메모리 누수</b>가 됩니다. 진행 중인 분은 남겨둬야 고가·저가 누적이 이어집니다.</li>
+</ul>
+</div>
+
+<div class="good">
+<b>왜 이 파일을 따로 뗐나</b> — <code>index.js</code>는 웹소켓 접속·재접속·구독 관리까지 하는 큰 파일입니다.
+거기 섞으면 <b>테스트를 못 합니다</b>. 순수 함수로 떼어낸 덕분에 <code>test_candles.js</code>가 웹소켓 없이
+<b>39개 회귀 테스트</b>(타임존·OHLC·이상치·델타 중복·메모리 정리·종목 독립·1만 건 부하)를 돌립니다.
+<b>돈이 걸린 숫자라 회귀 테스트가 꼭 필요했습니다.</b>
+</div>
+
+
+<!-- ============================================================ -->
+<h2 class="sec" id="f22"><span class="em">CODE 22</span>분봉 배치 저장</h2>
+
+<!--CODE:stock-ws/db.js:FN:saveCandles-->
+
+<div class="read">
+<div class="rt">🔍 줄 해석</div>
+<ul>
+<li><b><code>VALUES ?</code> 한 방에 전 종목</b>을 보냅니다. 원격 DB는 왕복만 6ms라, 40종목을 40번 나눠 보내면 <b>그것만 0.24초</b>가 날아갑니다. 묶으면 왕복 1회입니다.</li>
+<li><b>⚠️ <code>execute()</code>가 아니라 <code>query()</code></b> — prepared statement는 <code>VALUES ?</code> 형태의 <b>가변 길이 다중행 바인딩을 지원하지 않습니다</b>. 여기서 막히면 원인을 찾기 어렵습니다.</li>
+<li><b>컬럼마다 갱신 규칙이 다른 게 이 함수의 핵심입니다</b> (같은 분을 10초마다 여러 번 쓰기 때문):
+<table class="tbl">
+<tr><th>컬럼</th><th>규칙</th><th>왜</th></tr>
+<tr><td><code>open_p</code></td><td>갱신 안 함</td><td>첫 값이 이겨야 함 (그 분의 시가)</td></tr>
+<tr><td><code>high_p</code></td><td><code>GREATEST</code></td><td>나눠 써도 최고가 유지</td></tr>
+<tr><td><code>low_p</code></td><td><code>LEAST</code></td><td>나눠 써도 최저가 유지</td></tr>
+<tr><td><code>close_p</code></td><td>덮어씀</td><td>마지막에 쓴 값 = 마지막 체결가</td></tr>
+<tr><td><code>volume</code>·<code>trade_value</code></td><td><code>GREATEST</code></td><td>누적치라 되돌아가면 안 됨</td></tr>
+<tr><td><code>vol_delta</code>·<code>ticks</code></td><td>더하기</td><td>델타만 오므로 중복 가산 없음</td></tr>
+</table></li>
+<li>기본키가 <b>(stock_code, ts)</b>라서 "같은 종목의 같은 분은 하나뿐"이 <b>DB 차원에서 강제</b>됩니다. 애플리케이션이 실수해도 중복 행이 안 생깁니다.</li>
+</ul>
+</div>
+
+<h3 class="sub">커넥션 풀과 타임존</h3>
+
+<!--CODE:stock-ws/db.js:1-19-->
+
+<div class="read">
+<div class="rt">🔍 줄 해석</div>
+<ul>
+<li><code>timezone: '+09:00'</code>은 <b>mysql2 드라이버 쪽</b> 설정이고, <code>pool.on('connection')</code>의 <code>SET time_zone</code>은 <b>MySQL 서버 세션</b> 설정입니다. <b>둘 다 필요합니다.</b></li>
+<li>풀은 커넥션을 <b>새로 만들 때마다 세션 설정이 초기화</b>되므로, 생성 시점 이벤트에 걸어야 모든 커넥션에 적용됩니다.</li>
+</ul>
+</div>
+
+
+<!-- ============================================================ -->
+<h2 class="sec" id="f23"><span class="em">CODE 23</span>체결 처리와 안전한 종료</h2>
+
+<!--CODE:stock-ws/index.js:FN:handleTrade-->
+
+<div class="read">
+<div class="rt">🔍 줄 해석</div>
+<ul>
+<li><code>body.split('^')</code> — KIS 실시간은 <b><code>^</code>로 구분된 문자열</b>로 옵니다. 위치마다 의미가 정해져 있어서 <code>f[2]</code>=가격, <code>f[12]</code>=체결량, <code>f[13]</code>=누적거래량 식으로 꺼냅니다.</li>
+<li><b>①번 순서가 설계의 핵심입니다</b>: 브라우저 전송이 <b>DB 저장보다 먼저</b>입니다. 반대로 하면 원격 DB가 느려질 때 <b>화면 실시간까지 같이 멎습니다</b>.</li>
+<li><code>lastTradeAt = Date.now()</code> — <b>워치독용 생존 신호</b>. 장중에 이 값이 120초간 안 바뀌면 세션을 재접속합니다.</li>
+<li><b>②-0이 스로틀 '앞'에 있는 게 중요합니다</b>: <code>accumulateCandle</code>은 <b>모든 체결</b>을 봐야 고가·저가가 정확합니다. 스로틀 뒤에 두면 10초에 1건만 보게 되어 봉이 밋밋해집니다. 메모리 연산이라 DB 부하는 0입니다.</li>
+<li><code>allowWrite(map, code, ms)</code> — 종목별 마지막 저장 시각을 <code>Map</code>에 두고 간격을 확인합니다. 덕분에 필요 쓰기량이 <b>체결량과 무관하게</b> (종목수 × 1.1)건/초로 고정됩니다.</li>
+<li>각 저장은 <code>try/catch</code>로 감쌉니다 — <b>한 종목 저장 실패가 전체 수집을 멈추면 안 됩니다.</b></li>
+</ul>
+</div>
+
+<!--CODE:stock-ws/index.js:FN:flushCandlesToDb-->
+<!--CODE:stock-ws/index.js:FN:gracefulExit-->
+
+<div class="read">
+<div class="rt">🔍 줄 해석</div>
+<ul>
+<li><code>flushCandlesToDb</code>는 10초마다 자동 실행되고, <b>종료할 때 한 번 더</b> 실행됩니다.</li>
+<li><b><code>gracefulExit</code>이 없으면</b>: Ctrl+C로 끄는 순간 메모리에 있던 <b>진행 중인 1분이 통째로 사라집니다</b>. 매일 껐다 켜면 매일 1분씩 구멍이 납니다.</li>
+<li><code>shuttingDown</code> 플래그 — Ctrl+C를 <b>두 번 눌러도</b> 저장이 두 번 돌지 않게 막습니다.</li>
+<li><code>SIGINT</code>(Ctrl+C)와 <code>SIGTERM</code>(종료 요청) <b>둘 다</b> 잡습니다. 나중에 서비스로 등록해도 동작하게 하려는 것입니다.</li>
+</ul>
+</div>
+
+
+<!-- ============================================================ -->
+<h2 class="sec" id="f24"><span class="em">CODE 24</span>cron 3종</h2>
+
+<h3 class="sub">24-1. 분봉 보수 집계 — <code>INSERT IGNORE</code> 한 단어의 설계</h3>
+
+<!--CODE:cron/aggregate_candles.php-->
+
+<div class="read">
+<div class="rt">🔍 줄 해석</div>
+<ul>
+<li><b>역할 분담이 이 파일의 전부입니다.</b> 주 경로는 수집기(정밀), 이 파일은 <b>보수 경로</b>(수집기가 꺼져 있던 구간을 뒤늦게 메움).</li>
+<li><b><code>INSERT IGNORE</code></b> — 이미 있는 분은 <b>절대 안 건드립니다</b>. 수집기가 만든 정밀 분봉을, 10초 간격으로 듬성한 원시 로그 집계로 덮어쓰면 <b>손해</b>이기 때문입니다.
+<br>👉 <b>"정밀한 쪽이 이긴다"는 규칙을 SQL 문법 한 단어로 못박은 것</b>입니다. 코드로 조건 분기를 하지 않아도 됩니다.</li>
+<li><code>vol_delta = GREATEST(MAX(volume) - MIN(volume), 0)</code> — 원시 로그엔 <b>누적거래량만</b> 있고 건별 체결량이 없어서 <b>뺄셈으로 근사</b>합니다. 수집기가 훨씬 정확한 이유입니다. 이 근사치라는 점도 "안 건드린다" 규칙의 근거입니다.</li>
+<li><b>진행 중인 분은 항상 제외</b>합니다(<code>&lt; 현재 분</code>). 아직 체결이 더 들어올 수 있는데 굳혀버리면 틀린 값이 남습니다.</li>
+<li>구간 기준을 전부 <b>DB의 <code>NOW()</code></b>로 잡습니다 — PHP <code>date()</code>면 9시간 어긋납니다.</li>
+<li>인자를 3가지로 받습니다: 분 수 / 날짜 / <code>--all</code>. <b>평소엔 5분마다 최근 30분, 최초 1회는 전 구간</b>이라는 두 용도를 한 파일로 처리합니다.</li>
+</ul>
+</div>
+
+<h3 class="sub">24-2. 일봉 백필 — 100행의 벽을 넘는 반복</h3>
+
+<!--CODE:cron/backfill_daily.php-->
+
+<div class="read">
+<div class="rt">🔍 줄 해석</div>
+<ul>
+<li><b><code>while(true)</code> 루프가 이 파일의 존재 이유입니다.</b> KIS가 한 번에 100행만 주므로, <b>끝 날짜를 뒤로 밀어가며</b> 반복 호출합니다.</li>
+<li><code>$to = date('Ymd', strtotime($oldest . ' -1 day'))</code> — 방금 받은 것 중 <b>가장 오래된 날의 하루 전</b>을 다음 끝 날짜로 삼습니다. 이렇게 과거로 걸어갑니다.</li>
+<li><b>탈출 조건이 4개</b>입니다:
+<br>① 데이터가 안 오면(상장 전) ② 목표 기간 도달 ③ <b>100행 미만이면</b> = 그 종목의 상장 시작까지 왔다는 뜻 ④ <code>$guard &gt;= 25</code> 무한루프 방지.
+<br>👉 외부 API를 반복 호출하는 루프에는 <b>반드시 가드가 필요합니다.</b> API가 예상 밖 응답을 주면 영원히 돌 수 있습니다.</li>
+<li><code>usleep(300000)</code> = 0.3초 간격 — 초당 호출 제한 회피. 초과분은 <code>kisQuotationGet</code>이 재시도합니다(CODE 7). <b>방어가 두 겹</b>입니다.</li>
+<li><code>ON DUPLICATE KEY UPDATE</code>로 <b>덮어씁니다</b>(분봉과 반대!). KIS 값이 항상 정답이고, <b>수정주가는 시간이 지나면 과거 값 자체가 바뀌므로</b> 갱신되는 게 맞습니다.</li>
+<li>인자 없이 돌리면 <b>최근 100영업일만</b> — 이게 <b>매일 스케줄러용</b>입니다. 이걸 안 돌리면 차트 날짜가 <b>매일 하루씩 밀립니다</b>(실제로 겪은 증상).</li>
+<li>대상 = 기본종목 ∪ 순위종목 ∪ 관심종목. PHP의 <code>+</code> 배열 합집합은 <b>키 중복 시 왼쪽 우선</b>이라 중복 제거가 자동입니다.</li>
+</ul>
+</div>
+
+<h3 class="sub">24-3. 원시 로그 정리 — 지우기 전에 확인</h3>
+
+<!--CODE:cron/purge_logs.php-->
+
+<div class="read">
+<div class="rt">🔍 줄 해석</div>
+<ul>
+<li><b>🔒 안전장치가 이 스크립트에서 가장 중요합니다.</b> 그날 <b>분봉 커버리지가 90% 미만이면 그날은 건너뜁니다</b>. 분봉 없이 원본을 지우면 그 구간은 <b>영영 복구 불가</b>입니다.</li>
+<li>커버리지 = <code>그날 분봉이 있는 종목 수 ÷ 그날 로그를 남긴 종목 수</code>. "행 수"가 아니라 <b>"종목 수"</b>로 재는 게 포인트입니다 — 한 종목만 잔뜩 있어도 커버리지가 높아 보이면 안 되니까요.</li>
+<li><code>--dry</code> 드라이런 — <b>되돌릴 수 없는 작업은 미리보기부터</b> 만듭니다. 실제로 이 옵션으로 "2,240,497행(86%) 삭제 예정"을 먼저 확인했습니다.</li>
+<li><b>청크 삭제</b>(<code>LIMIT 50000</code> + <code>usleep</code>) — 통째로 <code>DELETE</code>하면 <b>락이 오래 걸려 수집기가 밀립니다</b>. 5만 행씩 끊고 0.2초씩 쉬어 <b>사이사이 INSERT할 틈</b>을 줍니다.</li>
+<li>마지막 <code>OPTIMIZE TABLE</code>은 <b>안내만 하고 실행하지 않습니다</b>. InnoDB는 DELETE만으론 디스크가 안 줄지만, 이 명령은 테이블을 통째로 다시 써서 <b>장중에 돌리면 수집이 멈춥니다</b>.
+<br>👉 <b>위험한 일은 자동으로 하지 않고 사람에게 넘기는</b> 판단입니다.</li>
+</ul>
+</div>
+
+
+<!-- ============================================================ -->
+<h2 class="sec"><span class="em">정리</span>반복해서 나온 패턴 12가지</h2>
+
+<table class="tbl">
+<tr><th>#</th><th>패턴</th><th>어디서 봤나</th></tr>
+<tr><td>1</td><td><b>화면 먼저, 저장 나중</b></td><td>CODE 23 <code>handleTrade</code></td></tr>
+<tr><td>2</td><td><b>클라이언트 값 2차 검증</b></td><td>CODE 12·13 매수·매도</td></tr>
+<tr><td>3</td><td><b>트랜잭션 + 행 잠금</b></td><td>CODE 12·13</td></tr>
+<tr><td>4</td><td><b>시각은 DB에게 묻기</b></td><td>CODE 18 <code>getRangeStart</code>, CODE 24</td></tr>
+<tr><td>5</td><td><b>스키마 자동 보강(멱등)</b></td><td>CODE 3·15</td></tr>
+<tr><td>6</td><td><b>재시도에 반드시 탈출 조건</b></td><td>CODE 7·9·24-2</td></tr>
+<tr><td>7</td><td><b>안전한 기본값으로 떨어뜨리기</b></td><td>CODE 16 <code>?? $map['1D']</code></td></tr>
+<tr><td>8</td><td><b>허용 목록(whitelist) 검증</b></td><td>CODE 10 <code>safeNext</code>, CODE 20 정규식</td></tr>
+<tr><td>9</td><td><b>규칙을 SQL 문법으로 못박기</b></td><td>CODE 22 upsert, CODE 24-1 <code>INSERT IGNORE</code></td></tr>
+<tr><td>10</td><td><b>지우기 전 대체물 확인 + 드라이런</b></td><td>CODE 24-3</td></tr>
+<tr><td>11</td><td><b>부가 기능이 본 기능을 안 죽이게</b></td><td>CODE 5 로깅 <code>@</code>, CODE 23 <code>try/catch</code></td></tr>
+<tr><td>12</td><td><b>테스트 가능한 모양으로 떼어내기</b></td><td>CODE 21 <code>candles.js</code></td></tr>
+</table>
+
+<hr>
+<p class="lead" style="text-align:center; padding:20px 0;">
+2편 끝 — 개념이 막히면 <b>1편 개념·구조편</b>으로.<br>
+<span style="font-size:13px; color:var(--dim);">이 노트는 <code>docs/note2_template.html</code>에서 빌드되었습니다 · 코드는 빌드 시점의 실제 파일 · 기준일 2026-08-07</span>
+</p>
+
+</div>
+</body>
+</html>

@@ -388,6 +388,55 @@ function getVolumeRank($limit = 30)
     return $out;
 }
 
+// =============================================================
+// 일봉 조회 (기간별 시세) — 차트 3개월/1년/5년 탭의 재료
+// =============================================================
+// 우리가 직접 수집한 데이터는 2026-07-20부터뿐이다(그 전엔 수집기가 없었다).
+// 그래서 '3개월/1년' 탭을 진짜로 채우려면 과거 시세를 어디선가 받아와야 하는데,
+// KIS가 일봉을 통째로 준다. 모의투자(VTS) 도메인에서도 정상 동작함을 실호출로 확인했다.
+//
+// ⚠️ 한 번 호출에 output2가 최대 100행(=약 5개월)이다.
+//    더 긴 기간이 필요하면 날짜 구간을 100영업일씩 잘라 여러 번 불러야 한다
+//    → cron/backfill_daily.php 가 그 반복을 담당한다.
+//
+// $from / $to 는 'YYYYMMDD' 문자열.
+function getDailyChart($stockCode, $from, $to)
+{
+    $r = kisQuotationGet(
+        "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice",
+        "FHKST03010100",
+        [
+            'FID_COND_MRKT_DIV_CODE' => 'J',        // J = 주식/ETF
+            'FID_INPUT_ISCD'         => $stockCode,
+            'FID_INPUT_DATE_1'       => $from,
+            'FID_INPUT_DATE_2'       => $to,
+            'FID_PERIOD_DIV_CODE'    => 'D',        // D=일 W=주 M=월 Y=년
+            'FID_ORG_ADJ_PRC'        => '0',        // 0 = 수정주가 반영(액면분할 등으로 과거 가격이 튀지 않게)
+        ]
+    );
+    if (($r['rt_cd'] ?? '1') !== '0') return [];
+
+    $out = [];
+    foreach ($r['output2'] ?? [] as $o) {
+        $d = $o['stck_bsop_date'] ?? '';                 // 'YYYYMMDD'
+        if (strlen($d) !== 8) continue;                  // 휴장일은 빈 행으로 오기도 한다
+        $close = (int) ($o['stck_clpr'] ?? 0);
+        if ($close <= 0) continue;                       // 값이 안 채워진 행 방어
+        $out[] = [
+            'date'        => substr($d, 0, 4) . '-' . substr($d, 4, 2) . '-' . substr($d, 6, 2),
+            'open'        => (int) ($o['stck_oprc'] ?? 0),
+            'high'        => (int) ($o['stck_hgpr'] ?? 0),
+            'low'         => (int) ($o['stck_lwpr'] ?? 0),
+            'close'       => $close,
+            'volume'      => (int) ($o['acml_vol'] ?? 0),
+            'trade_value' => (int) ($o['acml_tr_pbmn'] ?? 0),
+        ];
+    }
+    // KIS는 최신 날짜부터 역순으로 준다. 차트는 시간 오름차순이어야 하므로 뒤집는다.
+    usort($out, fn($a, $b) => strcmp($a['date'], $b['date']));
+    return $out;
+}
+
 // -----------------------------
 // 해시키 발급 (주문 데이터 위변조 방지용)
 // -----------------------------
