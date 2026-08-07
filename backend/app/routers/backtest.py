@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 import pandas as pd
+from app.models.index_price import IndexPrice
 
 from app.database import get_db
 from app.models.price_history import PriceHistory
@@ -54,6 +55,26 @@ def _load_price_df(db: Session, ticker: str, start_date, end_date) -> pd.DataFra
     } for r in rows]).set_index("date").sort_index()
     return df
 
+def _load_index_df(db: Session, index_code: str, start_date, end_date) -> pd.DataFrame:
+    """py_index_prices(IndexPrice)에서 지수 데이터 로드."""
+    rows = (
+        db.query(IndexPrice)
+        .filter(
+            IndexPrice.index_code == index_code,
+            IndexPrice.date >= start_date,
+            IndexPrice.date <= end_date,
+        )
+        .all()
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail=f"{index_code} 지수 데이터가 없습니다.")
+
+    df = pd.DataFrame([{
+        "date": r.date, "open": r.open, "high": r.high,
+        "low": r.low, "close": r.close, "volume": r.volume,
+    } for r in rows]).set_index("date").sort_index()
+    return df
+
 def _attach_momentum_if_needed(
     price_df: pd.DataFrame, ticker: str, strategy_name: str, db: Session
 ) -> pd.DataFrame:
@@ -89,7 +110,7 @@ def compare_strategies(request: CompareRequest, db: Session = Depends(get_db)):
     # 1. 데이터 로드
     price_df = _load_price_df(db, request.ticker, request.start_date, request.end_date)
     try:
-        index_df = _load_price_df(db, "KOSPI", request.start_date, request.end_date)
+        index_df = _load_index_df(db, "KOSPI", request.start_date, request.end_date)
     except HTTPException:
         index_df = None
 
@@ -135,7 +156,7 @@ def grid_search(request: GridSearchRequest, db: Session = Depends(get_db)):
 
     price_df = _load_price_df(db, request.ticker, request.start_date, request.end_date)
     try:
-        index_df = _load_price_df(db, "KOSPI", request.start_date, request.end_date)
+        index_df = _load_index_df(db, "KOSPI", request.start_date, request.end_date)
     except HTTPException:
         index_df = None
 
@@ -178,7 +199,7 @@ def run_backtest(request: BacktestRequest, db: Session = Depends(get_db)):
     # 2. 종목 + 지수(KOSPI) 데이터 로드
     price_df = _load_price_df(db, request.ticker, request.start_date, request.end_date)
     try:
-        index_df = _load_price_df(db, "KOSPI", request.start_date, request.end_date)
+        index_df = _load_index_df(db, "KOSPI", request.start_date, request.end_date)
     except HTTPException:
         index_df = None
 

@@ -1,9 +1,12 @@
 import os
+from datetime import date
 import pandas as pd
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from app.services import kis_client
 from app.models.price_history import PriceHistory
 from app.models.order import LiveOrder
+from app.models.candle import Candle1m
 from app.strategies.base import BaseStrategy
 
 RISK_PER_TRADE_PCT = float(os.getenv("RISK_PER_TRADE_PCT", "0.02"))
@@ -37,22 +40,73 @@ def _load_historical_df(db: Session, ticker: str, lookback_days: int = 30) -> pd
     return df.set_index("date")
 
 
-def _append_today_price(historical_df: pd.DataFrame, ticker: str) -> pd.DataFrame:
-    """오늘자 실시간 현재가(KIS)를 마지막 행으로 추가/교체."""
-    current = kis_client.get_current_price(ticker)
-    today = pd.Timestamp.now().normalize()
+def _get_today_ohlc_from_candles(db: Session, ticker: str) -> dict | None:
+    """팀원의 stock_candles_1m(실시간 1분봉)을 오늘 날짜 기준으로 집계해 OHLCV 생성.
+    데이터가 없으면 None 반환."""
+    today = date.today()
 
-    today_row = pd.DataFrame([{
-        "open": current["open"],
-        "high": current["high"],
-        "low": current["low"],
-        "close": current["current_price"],
-        "volume": current["volume"],
-    }], index=[today])
+    candles = (
+        db.query(Candle1m)
+        .filter(
+            Candle1m.stock_code == ticker,
+            func.date(Candle1m.ts) == today,
+        )
+        .order_by(Candle1m.ts.asc())
+        .all()
+    )
+
+    if not candles:
+        return None
+
+    return {
+        "open": candles[0].open_p,
+        "high": max(c.high_p for c in candles),
+        "low": min(c.low_p for c in candles),
+        "close": candles[-1].close_p,
+        "volume": sum(c.vol_delta or 0 for c in candles),
+    }
+
+
+def _append_today_price(db: Session, historical_df: pd.DataFrame, ticker: str) -> pd.DataFrame:
+    """오늘자 실시간 OHLC(팀원의 stock_candles_1m 집계)를 마지막 행으로 추가/교체.
+    당일 데이터가 아직 없으면(장 시작 전 등) historical_df를 그대로 반환."""
+    today_ohlc = _get_today_ohlc_from_candles(db, ticker)
+    if today_ohlc is None:
+        return historical_df
+
+    today = pd.Timestamp.now().normalize()
+    today_row = pd.DataFrame([today_ohlc], index=[today])
 
     if today in historical_df.index:
         historical_df = historical_df.drop(index=today)
     return pd.concat([historical_df, today_row])
+
+
+def get_all_held_tickers(db: Session, strategy_name: str) -> list[str]:
+    """현재 보유 중인 모든 종목 티커 목록.
+    스크리닝 상위 목록에서 밀려나더라도 보유 종목은 계속 손절/익절 판단이
+    되어야 하므로, 스케줄러가 이 함수로 '반드시 감시해야 할 종목'을 챙긴다."""
+    candidate_tickers = (
+        db.query(LiveOrder.ticker)
+        .filter(LiveOrder.strategy_name == strategy_name, LiveOrder.status == "filled")
+        .distinct()
+        .all()
+    )
+    held = []
+    for (ticker,) in candidate_tickers:
+        last = (
+            db.query(LiveOrder)
+            .filter(
+                LiveOrder.ticker == ticker,
+                LiveOrder.strategy_name == strategy_name,
+                LiveOrder.status == "filled",
+            )
+            .order_by(LiveOrder.created_at.desc())
+            .first()
+        )
+        if last and last.order_type == "buy":
+            held.append(ticker)
+    return held
 
 
 def _get_current_position(db: Session, ticker: str, strategy_name: str) -> int:
@@ -102,7 +156,8 @@ def _check_risk_exit(current_price: int, avg_buy_price: int) -> str | None:
 
 def _calculate_position_size(current_price: int) -> int:
     """계좌 현금 잔고 기준으로 리스크 % 만큼 몇 주 살지 계산.
-    리스크 예산으로 1주도 못 사면, 현금으로 1주는 살 수 있는 한 최소 1주 허용."""
+    리스크 예산으로 1주도 못 사면, 현금으로 1주는 살 수 있는 한 최소 1주 허용.
+    계좌 잔고는 팀원 데이터로 대체 불가능한 영역이라 KIS API 그대로 사용."""
     balance = kis_client.get_account_balance()
     risk_amount = balance["cash"] * RISK_PER_TRADE_PCT
     quantity = int(risk_amount // current_price)
@@ -115,7 +170,7 @@ def _calculate_position_size(current_price: int) -> int:
     return quantity
 
 def _place_and_log(db, ticker, order_type, quantity, strategy_name, reason=None):
-    """공통 주문 실행 + DB 기록 헬퍼."""
+    """공통 주문 실행 + DB 기록 헬퍼. 주문 실행 자체는 KIS API 그대로 사용."""
     result = kis_client.place_order(ticker, order_type, quantity, price=0)
     order = LiveOrder(
         ticker=ticker,
@@ -145,7 +200,12 @@ def run_strategy_once(
     if len(historical_df) < 20:
         return {"action": "skip", "reason": f"데이터 부족 (보유: {len(historical_df)}일, 최소 20일 필요)"}
 
-    price_df = _append_today_price(historical_df, ticker)
+    price_df = _append_today_price(db, historical_df, ticker)
+
+    if len(price_df) == len(historical_df):
+        # 오늘자 실시간 데이터가 아직 없음 (장 시작 전 등)
+        return {"action": "skip", "reason": "오늘자 실시간 데이터 없음 (stock_candles_1m 비어있음)"}
+
     current_price = int(price_df["close"].iloc[-1])
     current_position = _get_current_position(db, ticker, strategy_name)
 

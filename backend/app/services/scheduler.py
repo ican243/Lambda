@@ -2,23 +2,36 @@ import os
 from datetime import datetime, time as dtime
 from apscheduler.schedulers.background import BackgroundScheduler
 from app.database import SessionLocal
-from app.services.executor import run_strategy_once
-from app.strategies.ma20 import MA20Strategy
-from app.strategies.golden_cross import GoldenCrossStrategy
-from app.strategies.rsi import RSIStrategy
-from app.strategies.combined import MA20RSIFilteredStrategy
+from app.services.executor import run_strategy_once, get_all_held_tickers
+from app.services.screener import get_top_candidates_by_trade_value
+from app.strategies.configurable_factor import ConfigurableFactorStrategy
 
 _STRATEGY_MAP = {
-    "ma20": MA20Strategy,
-    "golden_cross": GoldenCrossStrategy,
-    "rsi": RSIStrategy,
-    "ma20_rsi_filtered": MA20RSIFilteredStrategy,
+    "configurable_factor": ConfigurableFactorStrategy,
 }
 
 _scheduler = BackgroundScheduler(timezone="Asia/Seoul")
 
 # 매매 일시정지 플래그 (메모리 기반, 서버 재시작 시 초기화됨)
+# 기본값 True: 서버가 켜져도 자동으로 매매를 시작하지 않고, "시작" 버튼을 눌러야 매매가 시작됨
 _trading_paused = True
+
+STRATEGY_NAME = "configurable_factor"
+
+# 기본 팩터 설정 - momentum/market_regime은 추가 컬럼 병합(momentum_rank_pct, market_bullish)이
+# 필요해서 아직 실시간 매매 경로에 안 붙어있음. 우선 자체 완결적인 3개 지표만 사용.
+# buy_threshold/sell_threshold는 각 지표가 0~1 연속값 * weight로 합산되는 점수 기준.
+# (trend 35 + volume 20 + volatility 10 = 최대 65점)
+DEFAULT_STRATEGY_PARAMS = {
+    "indicators": ["trend", "volume", "volatility"],
+    "weights": {"trend": 35, "volume": 20, "volatility": 10},
+    "buy_threshold": float(os.getenv("BUY_THRESHOLD", "40")),
+    "sell_threshold": float(os.getenv("SELL_THRESHOLD", "15")),
+    "stop_loss_pct": float(os.getenv("STOP_LOSS_PCT", "0.03")),
+    "take_profit_pct": float(os.getenv("TAKE_PROFIT_PCT", "0.06")),
+}
+
+CANDIDATE_LIMIT = int(os.getenv("CANDIDATE_LIMIT", "100"))
 
 
 def is_trading_paused() -> bool:
@@ -36,18 +49,6 @@ def resume_trading():
     _trading_paused = False
     print("[스케줄러] 매매 재개됨")
 
-def _parse_watch_list() -> list[tuple[str, str]]:
-    """'005930:ma20,035720:rsi' 형태를 [(ticker, strategy_name), ...]로 파싱."""
-    raw = os.getenv("WATCH_LIST", "")
-    pairs = []
-    for item in raw.split(","):
-        item = item.strip()
-        if not item:
-            continue
-        ticker, strategy_name = item.split(":")
-        pairs.append((ticker.strip(), strategy_name.strip()))
-    return pairs
-
 
 def _is_market_hours() -> bool:
     """한국 정규장 시간(09:00~15:30, 평일)인지 체크."""
@@ -59,45 +60,59 @@ def _is_market_hours() -> bool:
     return market_open <= now.time() <= market_close
 
 
+def _get_candidate_tickers(db) -> list[str]:
+    """이번 사이클에서 평가할 종목 목록:
+    (1) stock_latest 기준 거래대금 상위 N개 (신규 매수 후보 발굴)
+    (2) 이미 보유 중인 종목 전부 (스크리닝 순위와 무관하게 손절/익절 판단 유지)
+    두 집합을 합쳐서 중복 제거."""
+    screened = get_top_candidates_by_trade_value(db, limit=CANDIDATE_LIMIT)
+    held = get_all_held_tickers(db, STRATEGY_NAME)
+    return list(dict.fromkeys(screened + held))  # 순서 유지하며 중복 제거
+
+
 def run_all_strategies():
-    """감시 목록의 모든 (종목, 전략) 조합을 1회씩 실행."""
+    """거래대금 상위 종목 + 보유 종목을 대상으로 팩터 스코어링 전략을 1회씩 실행."""
     if _trading_paused:
-        print(f"[스케줄러] 매매 일시정지 상태 — 스킵 ({datetime.now().strftime('%H:%M:%S')})")
+        print(f"[스케줄러] 매매 일시정지 상태 - 스킵 ({datetime.now().strftime('%H:%M:%S')})")
         return
-    
+
     if not _is_market_hours():
-        print(f"[스케줄러] 장 시간 외 — 스킵 ({datetime.now().strftime('%H:%M:%S')})")
+        print(f"[스케줄러] 장 시간 외 - 스킵 ({datetime.now().strftime('%H:%M:%S')})")
         return
 
     db = SessionLocal()
     try:
-        for ticker, strategy_name in _parse_watch_list():
-            strategy_cls = _STRATEGY_MAP.get(strategy_name)
-            if strategy_cls is None:
-                print(f"[스케줄러] 알 수 없는 전략: {strategy_name} — 스킵")
-                continue
+        candidates = _get_candidate_tickers(db)
+        if not candidates:
+            print("[스케줄러] 스크리닝 후보 없음 - 스킵")
+            return
 
-            strategy = strategy_cls()
+        strategy = ConfigurableFactorStrategy(params=DEFAULT_STRATEGY_PARAMS)
+
+        for ticker in candidates:
             try:
-                result = run_strategy_once(db, ticker, strategy, strategy_name, quantity=None)
-                print(f"[스케줄러] {ticker}/{strategy_name} → {result}")
+                result = run_strategy_once(db, ticker, strategy, STRATEGY_NAME, quantity=None)
+                if result.get("action") not in ("hold", "skip"):
+                    # 실제 매매가 발생한 경우만 로그 출력 (매 틱마다 hold/skip 다 찍으면 로그가 너무 많아짐)
+                    print(f"[스케줄러] {ticker} -> {result}")
             except Exception as e:
-                print(f"[스케줄러] {ticker}/{strategy_name} 실행 중 에러: {e}")
+                print(f"[스케줄러] {ticker} 실행 중 에러: {e}")
     finally:
         db.close()
 
 
 def start_scheduler():
-    interval = int(os.getenv("SCHEDULER_INTERVAL_MINUTES", "5"))
+    # 실시간 반응을 위해 초 단위 간격 사용 (팀원의 stock_latest/stock_candles_1m 실시간 데이터 기반)
+    interval = int(os.getenv("SCHEDULER_INTERVAL_SECONDS", "3"))
     _scheduler.add_job(
         run_all_strategies,
         "interval",
-        minutes=interval,
+        seconds=interval,
         id="strategy_runner",
         replace_existing=True,
     )
     _scheduler.start()
-    print(f"[스케줄러] 시작됨 ({interval}분 간격)")
+    print(f"[스케줄러] 시작됨 ({interval}초 간격, 후보 상위 {CANDIDATE_LIMIT}개 + 보유종목)")
 
 
 def stop_scheduler():

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, Depends
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models.stock import Stock
+from app.models.stock_master import StockMaster
 from app.services.kis_client import get_current_price, get_minute_ohlcv
 import asyncio
 import json
@@ -14,9 +14,9 @@ def current_price(ticker: str, db: Session = Depends(get_db)):
     """실시간 현재가 조회 (종목명 포함)."""
     try:
         data = get_current_price(ticker)
-        # DB에서 종목명 조회
-        stock = db.query(Stock).filter(Stock.ticker == ticker).first()
-        data["name"] = stock.name if stock else ticker
+        # stock_master(팀원 관리)에서 종목명 조회
+        stock = db.query(StockMaster).filter(StockMaster.stock_code == ticker).first()
+        data["name"] = stock.stock_name if stock else ticker
         return data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -39,8 +39,8 @@ async def price_websocket(websocket: WebSocket, ticker: str, interval: int = 5):
     db = SessionLocal()
 
     try:
-        stock = db.query(Stock).filter(Stock.ticker == ticker).first()
-        stock_name = stock.name if stock else ticker
+        stock = db.query(StockMaster).filter(StockMaster.stock_code == ticker).first()
+        stock_name = stock.stock_name if stock else ticker
 
         while True:
             # 연결이 끊겼으면 루프 탈출

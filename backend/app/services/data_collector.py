@@ -1,11 +1,11 @@
 from datetime import datetime
-from pykrx import stock as pykrx_stock
 import FinanceDataReader as fdr
 from sqlalchemy.orm import Session
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.dialects.mysql import insert as mysql_insert
 
 from app.models.price_history import PriceHistory
-from app.models.stock import Stock
+from app.models.stock_master import StockMaster
+from app.models.index_price import IndexPrice
 
 # 지수 ticker(내부 표기) -> FinanceDataReader 코드 매핑
 INDEX_FDR_CODE = {
@@ -15,11 +15,14 @@ INDEX_FDR_CODE = {
 
 
 def fetch_stock_ohlcv(ticker: str, start: str, end: str):
-    """개별 종목 OHLCV 조회 (pykrx). start/end는 'YYYYMMDD' 형식."""
-    df = pykrx_stock.get_market_ohlcv(start, end, ticker)
+    """개별 종목 OHLCV 조회 (FinanceDataReader). start/end는 'YYYYMMDD' 형식.
+    KRX 로그인이 필요 없는 fdr로 통일 (pykrx 의존성 제거)."""
+    start_fmt = f"{start[:4]}-{start[4:6]}-{start[6:]}"
+    end_fmt = f"{end[:4]}-{end[4:6]}-{end[6:]}"
+    df = fdr.DataReader(ticker, start_fmt, end_fmt)
     df = df.rename(columns={
-        "시가": "open", "고가": "high", "저가": "low",
-        "종가": "close", "거래량": "volume",
+        "Open": "open", "High": "high", "Low": "low",
+        "Close": "close", "Volume": "volume",
     })
     return df[["open", "high", "low", "close", "volume"]]
 
@@ -37,28 +40,26 @@ def fetch_index_ohlcv(index_ticker: str, start: str, end: str):
 
 
 def save_price_history(db: Session, ticker: str, df) -> int:
-    """DataFrame을 price_history 테이블에 upsert (중복 날짜는 갱신, 신규는 삽입).
+    """DataFrame을 price_history 테이블에 upsert (MySQL 방식).
     반환값: 저장된 행 수."""
     count = 0
-    for date, row in df.iterrows():
-        stmt = sqlite_insert(PriceHistory).values(
+    for dt, row in df.iterrows():
+        row_date = dt.date() if hasattr(dt, "date") else dt
+        stmt = mysql_insert(PriceHistory).values(
             ticker=ticker,
-            date=date.date() if hasattr(date, "date") else date,
+            date=row_date,
             open=float(row["open"]),
             high=float(row["high"]),
             low=float(row["low"]),
             close=float(row["close"]),
             volume=int(row["volume"]),
         )
-        stmt = stmt.on_conflict_do_update(
-            index_elements=["ticker", "date"],
-            set_={
-                "open": stmt.excluded.open,
-                "high": stmt.excluded.high,
-                "low": stmt.excluded.low,
-                "close": stmt.excluded.close,
-                "volume": stmt.excluded.volume,
-            },
+        stmt = stmt.on_duplicate_key_update(
+            open=stmt.inserted.open,
+            high=stmt.inserted.high,
+            low=stmt.inserted.low,
+            close=stmt.inserted.close,
+            volume=stmt.inserted.volume,
         )
         db.execute(stmt)
         count += 1
@@ -66,9 +67,35 @@ def save_price_history(db: Session, ticker: str, df) -> int:
     return count
 
 
-def ensure_stock_exists(db: Session, ticker: str, name: str, market: str):
-    """stocks 테이블에 없으면 등록 (이미 있으면 그대로 둠)."""
-    existing = db.query(Stock).filter(Stock.ticker == ticker).first()
-    if not existing:
-        db.add(Stock(ticker=ticker, name=name, market=market))
-        db.commit()
+def save_index_price(db: Session, index_code: str, df) -> int:
+    """지수 DataFrame을 py_index_prices 테이블에 upsert (MySQL 방식).
+    반환값: 저장된 행 수."""
+    count = 0
+    for dt, row in df.iterrows():
+        row_date = dt.date() if hasattr(dt, "date") else dt
+        stmt = mysql_insert(IndexPrice).values(
+            index_code=index_code,
+            date=row_date,
+            open=float(row["open"]),
+            high=float(row["high"]),
+            low=float(row["low"]),
+            close=float(row["close"]),
+            volume=float(row["volume"]) if row.get("volume") is not None else None,
+        )
+        stmt = stmt.on_duplicate_key_update(
+            open=stmt.inserted.open,
+            high=stmt.inserted.high,
+            low=stmt.inserted.low,
+            close=stmt.inserted.close,
+            volume=stmt.inserted.volume,
+        )
+        db.execute(stmt)
+        count += 1
+    db.commit()
+    return count
+
+
+def get_stock_master(db: Session, ticker: str) -> StockMaster | None:
+    """팀원이 관리하는 stock_master에서 종목 정보 조회 (읽기 전용).
+    여기서 직접 종목을 생성하지 않음 — 없으면 None 반환."""
+    return db.query(StockMaster).filter(StockMaster.stock_code == ticker).first()
