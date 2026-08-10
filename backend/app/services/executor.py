@@ -4,7 +4,7 @@ import pandas as pd
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.services import kis_client
-from app.models.price_history import PriceHistory
+from app.models.stock_candle_1d import StockCandle1d
 from app.models.order import LiveOrder
 from app.models.candle import Candle1m
 from app.strategies.base import BaseStrategy
@@ -15,11 +15,12 @@ TAKE_PROFIT_PCT = float(os.getenv("TAKE_PROFIT_PCT", "0.06"))
 
 
 def _load_historical_df(db: Session, ticker: str, lookback_days: int = 30) -> pd.DataFrame:
-    """price_history 테이블에서 최근 lookback_days만큼의 일봉 데이터 로드 (오늘 이전 데이터)."""
+    """팀원의 stock_candles_1d(일봉)에서 최근 lookback_days만큼의 데이터 로드 (오늘 이전 데이터).
+    price_history를 대체 - 팀원이 이미 수집한 데이터를 그대로 사용."""
     rows = (
-        db.query(PriceHistory)
-        .filter(PriceHistory.ticker == ticker)
-        .order_by(PriceHistory.date.desc())
+        db.query(StockCandle1d)
+        .filter(StockCandle1d.stock_code == ticker)
+        .order_by(StockCandle1d.d.desc())
         .limit(lookback_days)
         .all()
     )
@@ -29,11 +30,11 @@ def _load_historical_df(db: Session, ticker: str, lookback_days: int = 30) -> pd
         return pd.DataFrame(columns=["open", "high", "low", "close", "volume"])
 
     df = pd.DataFrame([{
-        "date": r.date,
-        "open": r.open,
-        "high": r.high,
-        "low": r.low,
-        "close": r.close,
+        "date": r.d,
+        "open": r.open_p,
+        "high": r.high_p,
+        "low": r.low_p,
+        "close": r.close_p,
         "volume": r.volume,
     } for r in rows])
     df["date"] = pd.to_datetime(df["date"])

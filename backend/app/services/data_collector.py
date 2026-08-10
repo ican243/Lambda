@@ -3,7 +3,6 @@ import FinanceDataReader as fdr
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 
-from app.models.price_history import PriceHistory
 from app.models.stock_master import StockMaster
 from app.models.index_price import IndexPrice
 
@@ -12,19 +11,6 @@ INDEX_FDR_CODE = {
     "KOSPI": "KS11",
     "KOSDAQ": "KQ11",
 }
-
-
-def fetch_stock_ohlcv(ticker: str, start: str, end: str):
-    """개별 종목 OHLCV 조회 (FinanceDataReader). start/end는 'YYYYMMDD' 형식.
-    KRX 로그인이 필요 없는 fdr로 통일 (pykrx 의존성 제거)."""
-    start_fmt = f"{start[:4]}-{start[4:6]}-{start[6:]}"
-    end_fmt = f"{end[:4]}-{end[4:6]}-{end[6:]}"
-    df = fdr.DataReader(ticker, start_fmt, end_fmt)
-    df = df.rename(columns={
-        "Open": "open", "High": "high", "Low": "low",
-        "Close": "close", "Volume": "volume",
-    })
-    return df[["open", "high", "low", "close", "volume"]]
 
 
 def fetch_index_ohlcv(index_ticker: str, start: str, end: str):
@@ -39,37 +25,11 @@ def fetch_index_ohlcv(index_ticker: str, start: str, end: str):
     return df[["open", "high", "low", "close", "volume"]]
 
 
-def save_price_history(db: Session, ticker: str, df) -> int:
-    """DataFrame을 price_history 테이블에 upsert (MySQL 방식).
-    반환값: 저장된 행 수."""
-    count = 0
-    for dt, row in df.iterrows():
-        row_date = dt.date() if hasattr(dt, "date") else dt
-        stmt = mysql_insert(PriceHistory).values(
-            ticker=ticker,
-            date=row_date,
-            open=float(row["open"]),
-            high=float(row["high"]),
-            low=float(row["low"]),
-            close=float(row["close"]),
-            volume=int(row["volume"]),
-        )
-        stmt = stmt.on_duplicate_key_update(
-            open=stmt.inserted.open,
-            high=stmt.inserted.high,
-            low=stmt.inserted.low,
-            close=stmt.inserted.close,
-            volume=stmt.inserted.volume,
-        )
-        db.execute(stmt)
-        count += 1
-    db.commit()
-    return count
-
-
 def save_index_price(db: Session, index_code: str, df) -> int:
     """지수 DataFrame을 py_index_prices 테이블에 upsert (MySQL 방식).
-    반환값: 저장된 행 수."""
+    반환값: 저장된 행 수.
+    주의: 팀원이 stock_candles_1d에 지수 데이터를 추가해주면 이 함수는
+    더 이상 필요 없어질 수 있음 (요청 완료, 대기 중)."""
     count = 0
     for dt, row in df.iterrows():
         row_date = dt.date() if hasattr(dt, "date") else dt

@@ -2,10 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 import pandas as pd
-from app.models.index_price import IndexPrice
 
 from app.database import get_db
-from app.models.price_history import PriceHistory
+from app.models.stock_candle_1d import StockCandle1d
+from app.models.index_price import IndexPrice
 from app.models.backtest_run import BacktestRun
 from app.models.backtest_result import BacktestResult
 from app.models.strategy import Strategy
@@ -37,12 +37,14 @@ STRATEGIES_REQUIRING_MOMENTUM = {"MA20_RSI_MOMENTUM", "CONFIGURABLE_FACTOR"}
 STRATEGIES_REQUIRING_MARKET_REGIME = {"CONFIGURABLE_FACTOR"}
 
 def _load_price_df(db: Session, ticker: str, start_date, end_date) -> pd.DataFrame:
+    """팀원의 stock_candles_1d(일봉)에서 종목 가격 데이터 로드.
+    price_history를 완전히 대체 - 팀원이 이미 수집한 데이터를 그대로 사용."""
     rows = (
-        db.query(PriceHistory)
+        db.query(StockCandle1d)
         .filter(
-            PriceHistory.ticker == ticker,
-            PriceHistory.date >= start_date,
-            PriceHistory.date <= end_date,
+            StockCandle1d.stock_code == ticker,
+            StockCandle1d.d >= start_date,
+            StockCandle1d.d <= end_date,
         )
         .all()
     )
@@ -50,13 +52,15 @@ def _load_price_df(db: Session, ticker: str, start_date, end_date) -> pd.DataFra
         raise HTTPException(status_code=404, detail=f"{ticker}의 가격 데이터가 없습니다.")
 
     df = pd.DataFrame([{
-        "date": r.date, "open": r.open, "high": r.high,
-        "low": r.low, "close": r.close, "volume": r.volume,
+        "date": r.d, "open": r.open_p, "high": r.high_p,
+        "low": r.low_p, "close": r.close_p, "volume": r.volume,
     } for r in rows]).set_index("date").sort_index()
     return df
 
 def _load_index_df(db: Session, index_code: str, start_date, end_date) -> pd.DataFrame:
-    """py_index_prices(IndexPrice)에서 지수 데이터 로드."""
+    """py_index_prices(IndexPrice)에서 지수 데이터 로드.
+    주의: 팀원이 stock_candles_1d에 지수 데이터를 추가해주면 그쪽으로 통합 가능
+    (요청 완료, 대기 중)."""
     rows = (
         db.query(IndexPrice)
         .filter(
@@ -409,4 +413,3 @@ def download_report(run_id: int, db: Session = Depends(get_db)):
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=backtest_report_{run_id}.pdf"},
     )
-
