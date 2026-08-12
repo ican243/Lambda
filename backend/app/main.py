@@ -7,10 +7,6 @@ from app import models  # noqa: F401  (테이블 등록을 위해 import 필요)
 from app.routers import backtest, stocks, realtime, trading
 from app.services.scheduler import start_scheduler, stop_scheduler
 
-# WebSocket 연결 끊김 에러 무시
-import logging
-logging.getLogger("uvicorn.error").setLevel(logging.CRITICAL)
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

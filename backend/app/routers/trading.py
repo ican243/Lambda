@@ -9,6 +9,8 @@ from app.strategies.ma20 import MA20Strategy
 from app.services.scheduler import run_all_strategies   #수동트리거(테스트/디버깅용)
 from app.services.scheduler import pause_trading, resume_trading, is_trading_paused
 from app.services.scheduler import _STRATEGY_MAP
+from app.models.stock_master import StockMaster
+from app.services.kis_client import get_current_price
 
 router = APIRouter(prefix="/trading", tags=["trading"])
 
@@ -129,3 +131,63 @@ def trigger_scheduler_now():
     """스케줄러 작업을 즉시 1회 수동 실행 (테스트/디버깅용)."""
     run_all_strategies()
     return {"status": "triggered"}
+
+@router.get("/positions")
+def get_positions(db: Session = Depends(get_db)):
+    """체결된 주문을 바탕으로 순보유수량/평단가를 계산하고 실시간 현재가를 붙여서 반환."""
+    filled_orders = (
+        db.query(LiveOrder)
+        .filter(LiveOrder.status == "filled")
+        .order_by(LiveOrder.ticker, LiveOrder.created_at)
+        .all()
+    )
+
+    holdings: dict[str, dict] = {}
+    for o in filled_orders:
+        h = holdings.setdefault(o.ticker, {"qty": 0, "cost": 0.0})
+        qty = o.filled_qty or o.quantity
+        price = o.filled_price or o.price
+
+        # ⚠ order_type 실제 값("buy"/"sell"인지 "01"/"02"인지)에 맞춰 조건 수정 필요
+        is_buy = str(o.order_type).lower() in ("buy", "b", "01")
+
+        if is_buy:
+            h["cost"] += qty * price
+            h["qty"] += qty
+        else:
+            if h["qty"] > 0:
+                avg = h["cost"] / h["qty"]
+                h["cost"] -= avg * qty
+            h["qty"] -= qty
+
+    positions = []
+    for ticker, h in holdings.items():
+        if h["qty"] <= 0:
+            continue
+
+        avg_price = h["cost"] / h["qty"] if h["qty"] else 0
+        stock = db.query(StockMaster).filter(StockMaster.stock_code == ticker).first()
+        name = stock.stock_name if stock else ticker
+
+        current_price = None
+        try:
+            live = get_current_price(ticker)
+            # ⚠ get_current_price가 반환하는 실제 키 이름 확인 필요 (아래 둘 중 하나로 시도)
+            current_price = live.get("current_price") or live.get("price")
+        except Exception:
+            pass
+
+        pnl = (current_price - avg_price) * h["qty"] if current_price else None
+        pnl_pct = ((current_price - avg_price) / avg_price * 100) if current_price and avg_price else None
+
+        positions.append({
+            "ticker": ticker,
+            "name": name,
+            "quantity": h["qty"],
+            "avg_price": round(avg_price, 2),
+            "current_price": current_price,
+            "pnl": round(pnl, 2) if pnl is not None else None,
+            "pnl_pct": round(pnl_pct, 2) if pnl_pct is not None else None,
+        })
+
+    return positions

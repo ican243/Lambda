@@ -36,8 +36,9 @@ target_metadata = Base.metadata
 PHP_MANAGED_TABLES = {
     "access_logs", "accounts", "admin_cash_logs", "admins",
     "app_settings", "auto_trade_settings", "error_logs", "holdings", "notices",
-    "orders", "stock_candles_1d", "stock_candles_1m", "stock_latest", "stock_logs",
-    "stock_master", "stock_posts", "stock_views", "users", "watchlist",
+    "orders", "index_candles_1d", "stock_candles_1d", "stock_candles_1m",
+    "stock_latest", "stock_logs", "stock_master", "stock_posts", "stock_views",
+    "users", "watchlist", 
 }
 
 

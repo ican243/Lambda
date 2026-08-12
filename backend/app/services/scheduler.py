@@ -5,10 +5,7 @@ from app.database import SessionLocal
 from app.services.executor import run_strategy_once, get_all_held_tickers
 from app.services.screener import get_top_candidates_by_trade_value
 from app.strategies.configurable_factor import ConfigurableFactorStrategy
-
-_STRATEGY_MAP = {
-    "configurable_factor": ConfigurableFactorStrategy,
-}
+from app.models.trade_signal_log import TradeSignalLog
 
 _scheduler = BackgroundScheduler(timezone="Asia/Seoul")
 
@@ -32,6 +29,10 @@ DEFAULT_STRATEGY_PARAMS = {
 }
 
 CANDIDATE_LIMIT = int(os.getenv("CANDIDATE_LIMIT", "100"))
+
+_STRATEGY_MAP = {
+    "configurable_factor": ConfigurableFactorStrategy,
+}
 
 
 def is_trading_paused() -> bool:
@@ -95,8 +96,19 @@ def run_all_strategies():
                 if result.get("action") not in ("hold", "skip"):
                     # 실제 매매가 발생한 경우만 로그 출력 (매 틱마다 hold/skip 다 찍으면 로그가 너무 많아짐)
                     print(f"[스케줄러] {ticker} -> {result}")
+
+                # 매매 여부와 무관하게 점수는 항상 기록 (임계값 튜닝용 데이터 축적)
+                db.add(TradeSignalLog(
+                    ticker=ticker,
+                    strategy_name=STRATEGY_NAME,
+                    score=result.get("score"),
+                    action=result.get("action", "unknown"),
+                    reason=result.get("reason"),
+                ))
             except Exception as e:
                 print(f"[스케줄러] {ticker} 실행 중 에러: {e}")
+
+        db.commit()
     finally:
         db.close()
 

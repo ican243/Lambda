@@ -41,7 +41,7 @@ class TradeResponse(BaseModel):
 class StockResponse(BaseModel):
     ticker: str
     name: str
-    market: str
+    market: str | None = None
 
     class Config:
         from_attributes = True

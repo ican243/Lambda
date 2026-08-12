@@ -227,20 +227,21 @@ def run_strategy_once(
     # ── 2순위: 전략 신호 체크 ──
     signal_df = strategy.generate_signals(price_df)
     latest_signal = int(signal_df["signal"].iloc[-1])
+    latest_score = float(signal_df["score"].iloc[-1]) if "score" in signal_df.columns else None
 
     if latest_signal == 1 and current_position == 1:
-        return {"action": "hold", "reason": "이미 보유 중"}
+        return {"action": "hold", "reason": "이미 보유 중", "score": latest_score}
     if latest_signal == -1 and current_position == 0:
-        return {"action": "hold", "reason": "보유 물량 없음"}
+        return {"action": "hold", "reason": "보유 물량 없음", "score": latest_score}
     if latest_signal == 0:
-        return {"action": "hold", "reason": "신호 없음"}
+        return {"action": "hold", "reason": "신호 없음", "score": latest_score}
 
     order_type = "buy" if latest_signal == 1 else "sell"
 
     if order_type == "buy":
         qty = quantity if quantity is not None else _calculate_position_size(current_price)
         if qty < 1:
-            return {"action": "skip", "reason": "리스크 기준 매수 가능 수량 부족 (잔고 부족)"}
+            return {"action": "skip", "reason": "리스크 기준 매수 가능 수량 부족 (잔고 부족)", "score": latest_score}
     else:
         last_buy = (
             db.query(LiveOrder)
@@ -250,4 +251,6 @@ def run_strategy_once(
         )
         qty = last_buy.quantity if last_buy else (quantity or 1)
 
-    return _place_and_log(db, ticker, order_type, qty, strategy_name, reason="strategy_signal")
+    result = _place_and_log(db, ticker, order_type, qty, strategy_name, reason="strategy_signal")
+    result["score"] = latest_score
+    return result

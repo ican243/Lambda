@@ -5,7 +5,7 @@ import pandas as pd
 
 from app.database import get_db
 from app.models.stock_candle_1d import StockCandle1d
-from app.models.index_price import IndexPrice
+from app.models.index_candle_1d import IndexCandle1d
 from app.models.backtest_run import BacktestRun
 from app.models.backtest_result import BacktestResult
 from app.models.strategy import Strategy
@@ -57,25 +57,35 @@ def _load_price_df(db: Session, ticker: str, start_date, end_date) -> pd.DataFra
     } for r in rows]).set_index("date").sort_index()
     return df
 
-def _load_index_df(db: Session, index_code: str, start_date, end_date) -> pd.DataFrame:
-    """py_index_prices(IndexPrice)에서 지수 데이터 로드.
-    주의: 팀원이 stock_candles_1d에 지수 데이터를 추가해주면 그쪽으로 통합 가능
-    (요청 완료, 대기 중)."""
+# 우리 코드 내부에서는 "KOSPI"/"KOSDAQ"로 부르고, 팀원 테이블에는 숫자 코드로 저장되어 있어 매핑 필요
+INDEX_CODE_MAP = {
+    "KOSPI": "0001",
+    "KOSDAQ": "1001",
+}
+
+def _load_index_df(db: Session, index_name: str, start_date, end_date) -> pd.DataFrame:
+    """팀원의 index_candles_1d(지수 일봉)에서 지수 데이터 로드.
+    index_name은 'KOSPI'/'KOSDAQ' (내부 표기), 팀원 테이블의 실제 index_code로 변환해서 조회.
+    py_index_prices를 완전히 대체 - 팀원이 이미 수집한 데이터를 그대로 사용."""
+    index_code = INDEX_CODE_MAP.get(index_name)
+    if index_code is None:
+        raise HTTPException(status_code=400, detail=f"알 수 없는 지수: {index_name}")
+
     rows = (
-        db.query(IndexPrice)
+        db.query(IndexCandle1d)
         .filter(
-            IndexPrice.index_code == index_code,
-            IndexPrice.date >= start_date,
-            IndexPrice.date <= end_date,
+            IndexCandle1d.index_code == index_code,
+            IndexCandle1d.d >= start_date,
+            IndexCandle1d.d <= end_date,
         )
         .all()
     )
     if not rows:
-        raise HTTPException(status_code=404, detail=f"{index_code} 지수 데이터가 없습니다.")
+        raise HTTPException(status_code=404, detail=f"{index_name} 지수 데이터가 없습니다.")
 
     df = pd.DataFrame([{
-        "date": r.date, "open": r.open, "high": r.high,
-        "low": r.low, "close": r.close, "volume": r.volume,
+        "date": r.d, "open": float(r.open_p), "high": float(r.high_p),
+        "low": float(r.low_p), "close": float(r.close_p), "volume": r.volume,
     } for r in rows]).set_index("date").sort_index()
     return df
 

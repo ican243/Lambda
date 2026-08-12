@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<!-- saved from url=(0053)file:///C:/Users/M/Downloads/trading_dashboard_2.html -->
+<html lang="ko"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+<title>Stock Lambda · Live Monitor</title>
+<style>
+  :root{
+    --bg:#0b0e14;
+    --panel:#11151d;
+    --panel-2:#161c27;
+    --line:#232a37;
+    --text:#e6e9ef;
+    --muted:#7b8494;
+    --gold:#d4af6a;
+    --navy:#3a5a9c;
+    --up:#3fb27f;
+    --down:#e0596b;
+    --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:"Pretendard","Malgun Gothic",-apple-system,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:16px 24px; border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#0d1119,#0b0e14);
+  }
+  .brand{display:flex; align-items:center; gap:10px;}
+  .brand .dot{width:8px;height:8px;border-radius:50%;background:var(--gold);box-shadow:0 0 8px var(--gold);}
+  .brand h1{font-size:15px; font-weight:600; letter-spacing:.04em; margin:0; color:var(--gold);}
+  .brand small{color:var(--muted); font-size:11px; display:block; margin-top:2px;}
+  .statusbar{display:flex; align-items:center; gap:16px; font-family:var(--mono); font-size:12px;}
+  .pill{
+    display:flex; align-items:center; gap:6px; padding:5px 10px; border-radius:20px;
+    border:1px solid var(--line); background:var(--panel-2); color:var(--muted);
+  }
+  .pill .light{width:7px;height:7px;border-radius:50%;background:var(--muted);}
+  .pill.ok{color:var(--up);border-color:rgba(63,178,127,.35);}
+  .pill.ok .light{background:var(--up); box-shadow:0 0 6px var(--up);}
+  .pill.bad{color:var(--down);border-color:rgba(224,89,107,.35);}
+  .pill.bad .light{background:var(--down); box-shadow:0 0 6px var(--down);}
+  button.kill{
+    font-family:var(--mono); font-size:12px; padding:7px 14px; border-radius:6px;
+    border:1px solid var(--down); background:transparent; color:var(--down); cursor:pointer;
+    transition:.15s;
+  }
+  button.kill:hover{background:var(--down); color:#0b0e14;}
+  button.kill.paused{border-color:var(--up); color:var(--up);}
+  button.kill.paused:hover{background:var(--up); color:#0b0e14;}
+
+  .settingsbar{
+    display:flex; gap:10px; align-items:center; padding:10px 24px;
+    border-bottom:1px solid var(--line); background:var(--panel); flex-wrap:wrap;
+  }
+  .settingsbar label{font-size:11px; color:var(--muted); margin-right:4px;}
+  .settingsbar input{
+    background:var(--panel-2); border:1px solid var(--line); color:var(--text);
+    border-radius:5px; padding:6px 8px; font-family:var(--mono); font-size:11px; width:150px;
+  }
+  .settingsbar input.url{width:260px;}
+  .settingsbar button{
+    font-family:var(--mono); font-size:11px; padding:7px 12px; border-radius:5px;
+    border:1px solid var(--navy); background:rgba(58,90,156,.15); color:#9db4e0; cursor:pointer;
+  }
+  .settingsbar button:hover{background:rgba(58,90,156,.3);}
+  .settingsbar .sep{width:1px;height:20px;background:var(--line);margin:0 4px;}
+
+  main{padding:20px 24px; display:grid; gap:18px; grid-template-columns: 1.1fr 1fr; grid-template-areas: "positions signals" "trades trades";}
+  @media (max-width:980px){ main{grid-template-columns:1fr; grid-template-areas:"positions" "signals" "trades";} }
+
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow:hidden;}
+  .card h2{
+    font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted);
+    margin:0; padding:12px 16px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center;
+  }
+  .card h2 span.count{color:var(--gold); font-family:var(--mono); font-size:11px;}
+  #positions{grid-area:positions;}
+  #signals{grid-area:signals;}
+  #trades{grid-area:trades;}
+
+  table{width:100%; border-collapse:collapse; font-family:var(--mono); font-size:12.5px;}
+  thead th{
+    text-align:right; font-weight:500; color:var(--muted); font-size:10.5px;
+    padding:8px 14px; border-bottom:1px solid var(--line); text-transform:uppercase; letter-spacing:.04em;
+  }
+  thead th:first-child, tbody td:first-child{text-align:left;}
+  tbody td{padding:9px 14px; border-bottom:1px solid rgba(35,42,55,.6); text-align:right; white-space:nowrap;}
+  tbody tr:hover{background:var(--panel-2);}
+  .up{color:var(--up);} .down{color:var(--down);} .neutral{color:var(--muted);}
+  .tag{padding:2px 7px; border-radius:4px; font-size:10.5px; border:1px solid;}
+  .tag.buy{color:var(--up); border-color:rgba(63,178,127,.4); background:rgba(63,178,127,.08);}
+  .tag.sell{color:var(--down); border-color:rgba(224,89,107,.4); background:rgba(224,89,107,.08);}
+  .tag.hold{color:var(--muted); border-color:var(--line); background:transparent;}
+  .empty, .err{padding:28px 16px; text-align:center; color:var(--muted); font-size:12px; font-family:var(--mono);}
+  .err{color:var(--down);}
+  .scorebar{display:inline-block; width:50px; height:5px; background:var(--line); border-radius:3px; overflow:hidden; vertical-align:middle; margin-right:6px;}
+  .scorebar i{display:block; height:100%; background:var(--gold);}
+  footer{padding:10px 24px; color:var(--muted); font-size:10.5px; font-family:var(--mono); text-align:right;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <span class="dot"></span>
+    <div>
+      <h1>STOCK LAMBDA · LIVE MONITOR</h1>
+      <small id="clock">10시 34분 15초</small>
+    </div>
+  </div>
+  <div class="statusbar">
+    <div class="pill bad" id="connPill"><span class="light"></span><span id="connText">연결 실패</span></div>
+    <div class="pill" id="tradingPill"><span class="light"></span><span id="tradingText">상태 확인 중</span></div>
+    <button class="kill" id="killBtn">⏸ 매매 일시정지</button>
+  </div>
+</header>
+
+<div class="settingsbar">
+  <label>API Base URL</label>
+  <input class="url" id="baseUrl" placeholder="http://localhost:8000" value="http://localhost:8000">
+  <span class="sep"></span>
+  <label>Positions</label><input id="epPositions" value="/trading/positions">
+  <label>Trades</label><input id="epTrades" value="/trading/orders">
+  <label>Status</label><input id="epStatus" value="/trading/scheduler/status">
+  <label>Pause</label><input id="epPause" value="/trading/scheduler/pause">
+  <label>Resume</label><input id="epResume" value="/trading/scheduler/resume">
+  <span class="sep"></span>
+  <label>새로고침(초)</label><input id="interval" style="width:50px" value="5">
+  <button id="applyBtn">적용 &amp; 시작</button>
+</div>
+
+<main>
+  <section class="card" id="positions">
+    <h2>보유 포지션 <span class="count" id="posCount">-</span></h2>
+    <div id="posBody"><div class="err">⚠ Failed to fetch</div></div>
+  </section>
+
+  <section class="card" id="signals">
+    <h2>매매 신호 / 스코어링 <span class="count">-</span></h2>
+    <div id="sigBody"><div class="empty">아직 신호/스코어링 로그를 저장하는 API가 없습니다.<br>백엔드에 로그 저장 + 조회 엔드포인트가 생기면 이 패널에 연결하세요.</div></div>
+  </section>
+
+  <section class="card" id="trades">
+    <h2>거래 내역 <span class="count" id="tradeCount">-</span></h2>
+    <div id="tradeBody"><div class="err">⚠ Failed to fetch</div></div>
+  </section>
+</main>
+
+<footer>엔드포인트 응답 형식이 다르면 위 설정에서 경로를 바꾸거나 아래 스크립트의 render 함수를 수정하세요.</footer>
+
+<script>
+let timer = null;
+
+function setClock(){
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString('ko-KR', {hour12:false});
+}
+setInterval(setClock, 1000); setClock();
+
+function setConn(ok, msg){
+  const p = document.getElementById('connPill');
+  const t = document.getElementById('connText');
+  p.className = 'pill ' + (ok ? 'ok' : 'bad');
+  t.textContent = msg;
+}
+
+function fmtNum(v, digits=0){
+  if(v === null || v === undefined || isNaN(v)) return '-';
+  return Number(v).toLocaleString('ko-KR', {maximumFractionDigits:digits, minimumFractionDigits:digits});
+}
+function pctClass(v){ return v > 0 ? 'up' : (v < 0 ? 'down' : 'neutral'); }
+function sign(v){ return v > 0 ? '+' : ''; }
+
+async function fetchJson(base, path){
+  const url = base.replace(/\/$/,'') + path;
+  const res = await fetch(url, {headers:{'Accept':'application/json'}});
+  if(!res.ok) throw new Error(path + ' → HTTP ' + res.status);
+  return res.json();
+}
+// 응답이 배열이거나 {items:[...]}, {data:[...]} 형태 모두 대응
+function asArray(json){
+  if(Array.isArray(json)) return json;
+  if(json && Array.isArray(json.items)) return json.items;
+  if(json && Array.isArray(json.data)) return json.data;
+  if(json && Array.isArray(json.positions)) return json.positions;
+  if(json && Array.isArray(json.signals)) return json.signals;
+  if(json && Array.isArray(json.trades)) return json.trades;
+  return [];
+}
+
+function renderPositions(list){
+  document.getElementById('posCount').textContent = list.length;
+  const el = document.getElementById('posBody');
+  if(!list.length){ el.innerHTML = '<div class="empty">보유 중인 포지션이 없습니다</div>'; return; }
+  let rows = list.map(p=>{
+    const code = p.code ?? p.ticker ?? p.symbol ?? '-';
+    const name = p.name ?? p.stock_name ?? '';
+    const qty = p.quantity ?? p.qty ?? '-';
+    const avg = p.avg_price ?? p.average_price ?? p.buy_price ?? null;
+    const cur = p.current_price ?? p.price ?? null;
+    const pnlPct = p.pnl_pct ?? p.profit_rate ?? p.return_pct ?? (avg && cur ? ((cur-avg)/avg*100) : null);
+    const pnlAmt = p.pnl ?? p.profit ?? (avg && cur && qty!=='-' ? (cur-avg)*qty : null);
+    return `<tr>
+      <td>${name ? name+' <span class="neutral">'+code+'</span>' : code}</td>
+      <td>${fmtNum(qty)}</td>
+      <td>${fmtNum(avg)}</td>
+      <td>${fmtNum(cur)}</td>
+      <td class="${pctClass(pnlAmt||0)}">${pnlAmt!=null? sign(pnlAmt)+fmtNum(pnlAmt):'-'}</td>
+      <td class="${pctClass(pnlPct||0)}">${pnlPct!=null? sign(pnlPct)+fmtNum(pnlPct,2)+'%':'-'}</td>
+    </tr>`;
+  }).join('');
+  el.innerHTML = `<table><thead><tr><th>종목</th><th>수량</th><th>평단</th><th>현재가</th><th>손익</th><th>수익률</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function renderSignals(list){
+  document.getElementById('sigCount').textContent = list.length;
+  const el = document.getElementById('sigBody');
+  if(!list.length){ el.innerHTML = '<div class="empty">신호 데이터가 없습니다</div>'; return; }
+  let rows = list.slice(0,50).map(s=>{
+    const code = s.code ?? s.ticker ?? s.symbol ?? '-';
+    const name = s.name ?? s.stock_name ?? '';
+    const action = (s.action ?? s.signal ?? s.decision ?? 'hold').toString().toLowerCase();
+    const tagClass = action.includes('buy') ? 'buy' : action.includes('sell') ? 'sell' : 'hold';
+    const score = s.score ?? s.total_score ?? s.factor_score ?? null;
+    const time = s.timestamp ?? s.time ?? s.created_at ?? '';
+    const scoreBar = score!=null ? `<span class="scorebar"><i style="width:${Math.max(0,Math.min(100,score))}%"></i></span>${fmtNum(score,1)}` : '-';
+    return `<tr>
+      <td>${name ? name+' <span class="neutral">'+code+'</span>' : code}</td>
+      <td><span class="tag ${tagClass}">${action.toUpperCase()}</span></td>
+      <td>${scoreBar}</td>
+      <td class="neutral">${time ? new Date(time).toLocaleTimeString('ko-KR',{hour12:false}) : '-'}</td>
+    </tr>`;
+  }).join('');
+  el.innerHTML = `<table><thead><tr><th>종목</th><th>신호</th><th>스코어</th><th>시각</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function renderTrades(list){
+  document.getElementById('tradeCount').textContent = list.length;
+  const el = document.getElementById('tradeBody');
+  if(!list.length){ el.innerHTML = '<div class="empty">거래 내역이 없습니다</div>'; return; }
+  let rows = list.slice(0,50).map(t=>{
+    const code = t.code ?? t.ticker ?? t.symbol ?? '-';
+    const name = t.name ?? t.stock_name ?? '';
+    const side = (t.side ?? t.order_type ?? t.action ?? '-').toString().toLowerCase();
+    const tagClass = side.includes('buy') ? 'buy' : side.includes('sell') ? 'sell' : 'hold';
+    const qty = t.quantity ?? t.qty ?? '-';
+    const price = t.filled_price ?? t.price ?? t.executed_price ?? null;
+    const time = t.timestamp ?? t.executed_at ?? t.time ?? t.created_at ?? '';
+    const status = t.status ?? t.order_status ?? '';
+    return `<tr>
+      <td>${name ? name+' <span class="neutral">'+code+'</span>' : code}</td>
+      <td><span class="tag ${tagClass}">${side.toUpperCase()}</span></td>
+      <td>${fmtNum(qty)}</td>
+      <td>${fmtNum(price)}</td>
+      <td class="neutral">${status}</td>
+      <td class="neutral">${time ? new Date(time).toLocaleString('ko-KR',{hour12:false}) : '-'}</td>
+    </tr>`;
+  }).join('');
+  el.innerHTML = `<table><thead><tr><th>종목</th><th>구분</th><th>수량</th><th>가격</th><th>상태</th><th>시각</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function showErr(elId, msg){
+  document.getElementById(elId).innerHTML = `<div class="err">⚠ ${msg}</div>`;
+}
+
+let isPaused = false;
+function setTradingPill(paused){
+  isPaused = paused;
+  const p = document.getElementById('tradingPill');
+  const t = document.getElementById('tradingText');
+  const btn = document.getElementById('killBtn');
+  if(paused){
+    p.className='pill bad'; t.textContent='매매 일시정지됨';
+    btn.textContent='▶ 매매 재개'; btn.classList.add('paused');
+  } else {
+    p.className='pill ok'; t.textContent='매매 진행 중';
+    btn.textContent='⏸ 매매 일시정지'; btn.classList.remove('paused');
+  }
+}
+
+async function pollOnce(){
+  const base = document.getElementById('baseUrl').value.trim();
+  const eps = {
+    positions: document.getElementById('epPositions').value.trim(),
+    trades: document.getElementById('epTrades').value.trim(),
+    status: document.getElementById('epStatus').value.trim(),
+  };
+  let anyOk = false;
+
+  try{
+    const j = await fetchJson(base, eps.positions);
+    renderPositions(asArray(j)); anyOk = true;
+  }catch(e){ showErr('posBody', e.message); }
+
+  try{
+    const j = await fetchJson(base, eps.trades);
+    renderTrades(asArray(j)); anyOk = true;
+  }catch(e){ showErr('tradeBody', e.message); }
+
+  try{
+    const j = await fetchJson(base, eps.status);
+    const paused = j.is_paused ?? j.paused ?? j.trading_paused ?? false;
+    setTradingPill(!!paused);
+    anyOk = true;
+  }catch(e){ /* status 엔드포인트 없어도 무시 */ }
+
+  setConn(anyOk, anyOk ? '연결됨' : '연결 실패');
+}
+
+document.getElementById('applyBtn').addEventListener('click', ()=>{
+  if(timer) clearInterval(timer);
+  pollOnce();
+  const sec = Math.max(2, parseInt(document.getElementById('interval').value) || 5);
+  timer = setInterval(pollOnce, sec*1000);
+});
+
+document.getElementById('killBtn').addEventListener('click', async ()=>{
+  const base = document.getElementById('baseUrl').value.trim();
+  // 현재 정지 상태면 resume 엔드포인트를, 아니면 pause 엔드포인트를 호출
+  const path = (isPaused
+    ? document.getElementById('epResume').value.trim()
+    : document.getElementById('epPause').value.trim());
+  try{
+    const res = await fetch(base.replace(/\/$/,'')+path, {method:'POST'});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    setTradingPill(!isPaused);
+  }catch(e){
+    alert('요청 실패: ' + e.message + '\n(Pause/Resume 엔드포인트 경로를 확인하세요)');
+  }
+});
+
+// 초기 1회 자동 실행
+pollOnce();
+timer = setInterval(pollOnce, 5000);
+</script>
+
+
+</body></html>
