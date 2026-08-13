@@ -137,6 +137,7 @@ def compare_strategies(request: CompareRequest, db: Session = Depends(get_db)):
 
         # 2. 전략별 실행
         strategy_price_df = _attach_momentum_if_needed(price_df, request.ticker, strategy_name, db)
+        strategy_price_df = _attach_market_regime_if_needed(strategy_price_df, strategy_name, index_df)
         strategy = strategy_cls()
         signal_df = strategy.generate_signals(strategy_price_df)
         trades = simulate_trades(signal_df)
@@ -173,6 +174,9 @@ def grid_search(request: GridSearchRequest, db: Session = Depends(get_db)):
         index_df = _load_index_df(db, "KOSPI", request.start_date, request.end_date)
     except HTTPException:
         index_df = None
+
+    price_df = _attach_momentum_if_needed(price_df, request.ticker, request.strategy_name, db)
+    price_df = _attach_market_regime_if_needed(price_df, request.strategy_name, index_df)
 
     raw_results = run_grid_search(
         strategy_name=request.strategy_name,

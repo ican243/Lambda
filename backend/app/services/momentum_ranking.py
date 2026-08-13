@@ -104,7 +104,9 @@ class MomentumRankingService:
             return df
 
         rank_df = pd.DataFrame(rows, columns=["date", "rank_pct"]).set_index("date")
-        df["momentum_rank_pct"] = df.index.map(rank_df["rank_pct"])
+        rank_df.index = pd.to_datetime(rank_df.index).normalize()
+        price_dates = pd.to_datetime(df.index).normalize()
+        df["momentum_rank_pct"] = price_dates.map(rank_df["rank_pct"])
         return df
 
     def attach_market_regime(

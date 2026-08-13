@@ -2,6 +2,7 @@ from itertools import product
 from app.strategies.ma20 import MA20Strategy
 from app.strategies.golden_cross import GoldenCrossStrategy
 from app.strategies.rsi import RSIStrategy
+from app.strategies.configurable_factor import ConfigurableFactorStrategy
 from app.services.simulator import simulate_trades
 from app.services.analyzer import analyze_backtest
 import pandas as pd
@@ -10,6 +11,7 @@ STRATEGY_MAP = {
     "MA20": MA20Strategy,
     "GOLDEN_CROSS": GoldenCrossStrategy,
     "RSI": RSIStrategy,
+    "CONFIGURABLE_FACTOR": ConfigurableFactorStrategy,
 }
 
 

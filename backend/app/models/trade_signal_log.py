@@ -3,15 +3,18 @@ from app.database import Base
 
 
 class TradeSignalLog(Base):
-    """매매 판단 시점의 팩터 스코어 기록.
-    실제 매매(buy/sell)가 안 일어난 경우(hold/skip)도 포함해서 남겨야
-    나중에 buy_threshold/sell_threshold 튜닝 시 실제 점수 분포를 볼 수 있음."""
+    """의미 있는 매매 판단 이벤트를 보존하는 로그."""
+
     __tablename__ = "py_trade_signal_log"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     ticker = Column(String(10), nullable=False, index=True)
     strategy_name = Column(String(50), nullable=False, index=True)
-    score = Column(Float, nullable=True)  # 점수 계산 전 단계(데이터 부족 등)면 NULL
+    score = Column(Float, nullable=True)
+    signal = Column(Integer, nullable=True)  # -1 / 0 / 1
     action = Column(String(10), nullable=False)  # buy / sell / hold / skip
     reason = Column(String(50), nullable=True)
+    event_type = Column(String(30), nullable=True, index=True)
+    source = Column(String(20), nullable=False, default="scheduler", index=True)
+    evaluated_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, server_default=func.now(), index=True)

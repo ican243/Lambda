@@ -8,9 +8,20 @@ from app.services.executor import run_strategy_once
 from app.strategies.ma20 import MA20Strategy
 from app.services.scheduler import run_all_strategies   #수동트리거(테스트/디버깅용)
 from app.services.scheduler import pause_trading, resume_trading, is_trading_paused
-from app.services.scheduler import _STRATEGY_MAP
+from app.services.scheduler import _STRATEGY_MAP, DEFAULT_STRATEGY_PARAMS
+from app.services.log_policy import record_decision_log
 from app.models.stock_master import StockMaster
+from app.models.position_state import PositionState
 from app.services.kis_client import get_current_price
+from app.services.executor import (
+    MAX_OPEN_POSITIONS,
+    MAX_HOLDING_TRADING_DAYS,
+    PARTIAL_TAKE_PROFIT_PCT,
+    PARTIAL_TAKE_PROFIT_RATIO,
+    STOP_LOSS_PCT,
+    TRAILING_STOP_ACTIVATION_PCT,
+    TRAILING_STOP_DRAWDOWN_PCT,
+)
 
 router = APIRouter(prefix="/trading", tags=["trading"])
 
@@ -86,16 +97,33 @@ def check_order_status(
 @router.post("/run-strategy")
 def run_strategy_endpoint(
     ticker: str,
-    strategy_name: str = "ma20",
+    strategy_name: str = "configurable_factor",
     quantity: int | None = None,
+    source: str = "manual",
     db: Session = Depends(get_db),
 ):
     strategy_cls = _STRATEGY_MAP.get(strategy_name)
     if strategy_cls is None:
         return {"action": "error", "reason": f"알 수 없는 전략: {strategy_name}"}
 
-    strategy = strategy_cls()
+    if source not in {"manual", "manual_test"}:
+        return {"action": "error", "reason": "source는 manual 또는 manual_test만 허용됩니다."}
+
+    strategy = strategy_cls(params=DEFAULT_STRATEGY_PARAMS)
     result = run_strategy_once(db, ticker, strategy, strategy_name, quantity)
+    try:
+        record_decision_log(
+            db,
+            ticker=ticker,
+            strategy_name=strategy_name,
+            result=result,
+            source=source,
+            strategy_params=DEFAULT_STRATEGY_PARAMS,
+        )
+        db.commit()
+    except Exception as log_error:
+        db.rollback()
+        result["log_warning"] = f"판단 결과는 반환했지만 로그 저장에 실패했습니다: {log_error}"
     return result
 
 @router.get("/orders")
@@ -129,8 +157,8 @@ def list_orders(skip: int = 0, limit: int = 50, db: Session = Depends(get_db)):
 @router.post("/scheduler/run-now")
 def trigger_scheduler_now():
     """스케줄러 작업을 즉시 1회 수동 실행 (테스트/디버깅용)."""
-    run_all_strategies()
-    return {"status": "triggered"}
+    run_all_strategies(source="scheduler_manual")
+    return {"status": "triggered", "source": "scheduler_manual"}
 
 @router.get("/positions")
 def get_positions(db: Session = Depends(get_db)):
@@ -190,4 +218,81 @@ def get_positions(db: Session = Depends(get_db)):
             "pnl_pct": round(pnl_pct, 2) if pnl_pct is not None else None,
         })
 
-    return positions
+        return positions
+
+
+@router.get("/risk-policy")
+def get_risk_policy():
+    """프론트가 현재 적용 중인 매도·포지션 제한 정책을 표시할 수 있도록 반환한다."""
+    return {
+        "stop_loss_pct": STOP_LOSS_PCT,
+        "partial_take_profit_pct": PARTIAL_TAKE_PROFIT_PCT,
+        "partial_take_profit_ratio": PARTIAL_TAKE_PROFIT_RATIO,
+        "trailing_stop_activation_pct": TRAILING_STOP_ACTIVATION_PCT,
+        "trailing_stop_drawdown_pct": TRAILING_STOP_DRAWDOWN_PCT,
+        "max_holding_trading_days": MAX_HOLDING_TRADING_DAYS,
+        "max_open_positions": MAX_OPEN_POSITIONS,
+        "sell_priority": [
+            "stop_loss",
+            "trailing_stop",
+            "partial_take_profit",
+            "time_exit",
+            "strategy_signal",
+        ],
+    }
+
+
+@router.get("/managed-positions")
+def get_managed_positions(
+    strategy_name: str = "configurable_factor",
+    db: Session = Depends(get_db),
+):
+    """trailing·부분익절·보유기간 상태를 포함한 프론트용 포지션 조회 API."""
+    states = (
+        db.query(PositionState)
+        .filter(
+            PositionState.strategy_name == strategy_name,
+            PositionState.quantity > 0,
+        )
+        .order_by(PositionState.updated_at.desc())
+        .all()
+    )
+    result = []
+    for state in states:
+        stock = db.query(StockMaster).filter(StockMaster.stock_code == state.ticker).first()
+        current_price = None
+        try:
+            live = get_current_price(state.ticker)
+            current_price = live.get("current_price") or live.get("price")
+            if current_price is not None:
+                current_price = float(current_price)
+        except Exception:
+            pass
+
+        pnl = None
+        pnl_pct = None
+        if current_price is not None and state.avg_buy_price:
+            pnl = (current_price - state.avg_buy_price) * state.quantity
+            pnl_pct = (current_price - state.avg_buy_price) / state.avg_buy_price
+
+        result.append({
+            "ticker": state.ticker,
+            "name": stock.stock_name if stock else state.ticker,
+            "strategy_name": state.strategy_name,
+            "quantity": state.quantity,
+            "avg_buy_price": state.avg_buy_price,
+            "highest_price": state.highest_price,
+            "trailing_active": bool(state.trailing_active),
+            "partial_profit_taken": bool(state.partial_profit_taken),
+            "first_buy_at": state.first_buy_at.isoformat() if state.first_buy_at else None,
+            "updated_at": state.updated_at.isoformat() if state.updated_at else None,
+            "current_price": current_price,
+            "pnl": round(pnl, 2) if pnl is not None else None,
+            "pnl_pct": round(pnl_pct, 6) if pnl_pct is not None else None,
+        })
+    return {
+        "strategy_name": strategy_name,
+        "open_position_count": len(result),
+        "max_open_positions": MAX_OPEN_POSITIONS,
+        "positions": result,
+    }

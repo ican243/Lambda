@@ -5,7 +5,7 @@ from app.database import SessionLocal
 from app.services.executor import run_strategy_once, get_all_held_tickers
 from app.services.screener import get_top_candidates_by_trade_value
 from app.strategies.configurable_factor import ConfigurableFactorStrategy
-from app.models.trade_signal_log import TradeSignalLog
+from app.services.log_policy import cleanup_old_logs, record_decision_log
 
 _scheduler = BackgroundScheduler(timezone="Asia/Seoul")
 
@@ -16,12 +16,12 @@ _trading_paused = True
 STRATEGY_NAME = "configurable_factor"
 
 # 기본 팩터 설정 - momentum/market_regime은 추가 컬럼 병합(momentum_rank_pct, market_bullish)이
-# 필요해서 아직 실시간 매매 경로에 안 붙어있음. 우선 자체 완결적인 3개 지표만 사용.
+# 실시간 경로에서도 momentum_rank_pct와 market_bullish를 함께 병합해 5개 지표를 사용한다.
 # buy_threshold/sell_threshold는 각 지표가 0~1 연속값 * weight로 합산되는 점수 기준.
-# (trend 35 + volume 20 + volatility 10 = 최대 65점)
+# (trend 35 + momentum 25 + volume 20 + volatility 10 + market_regime 10 = 최대 100점)
 DEFAULT_STRATEGY_PARAMS = {
-    "indicators": ["trend", "volume", "volatility"],
-    "weights": {"trend": 35, "volume": 20, "volatility": 10},
+    "indicators": ["trend", "momentum", "volume", "volatility", "market_regime"],
+    "weights": {"trend": 35, "momentum": 25, "volume": 20, "volatility": 10, "market_regime": 10},
     "buy_threshold": float(os.getenv("BUY_THRESHOLD", "40")),
     "sell_threshold": float(os.getenv("SELL_THRESHOLD", "15")),
     "stop_loss_pct": float(os.getenv("STOP_LOSS_PCT", "0.03")),
@@ -71,8 +71,10 @@ def _get_candidate_tickers(db) -> list[str]:
     return list(dict.fromkeys(screened + held))  # 순서 유지하며 중복 제거
 
 
-def run_all_strategies():
+def run_all_strategies(source: str = "scheduler"):
     """거래대금 상위 종목 + 보유 종목을 대상으로 팩터 스코어링 전략을 1회씩 실행."""
+    if source not in {"scheduler", "scheduler_manual"}:
+        raise ValueError(f"허용되지 않는 스케줄러 source: {source}")
     if _trading_paused:
         print(f"[스케줄러] 매매 일시정지 상태 - 스킵 ({datetime.now().strftime('%H:%M:%S')})")
         return
@@ -97,18 +99,42 @@ def run_all_strategies():
                     # 실제 매매가 발생한 경우만 로그 출력 (매 틱마다 hold/skip 다 찍으면 로그가 너무 많아짐)
                     print(f"[스케줄러] {ticker} -> {result}")
 
-                # 매매 여부와 무관하게 점수는 항상 기록 (임계값 튜닝용 데이터 축적)
-                db.add(TradeSignalLog(
+                record_decision_log(
+                    db,
                     ticker=ticker,
                     strategy_name=STRATEGY_NAME,
-                    score=result.get("score"),
-                    action=result.get("action", "unknown"),
-                    reason=result.get("reason"),
-                ))
+                    result=result,
+                    source=source,
+                    strategy_params=DEFAULT_STRATEGY_PARAMS,
+                )
             except Exception as e:
                 print(f"[스케줄러] {ticker} 실행 중 에러: {e}")
+                try:
+                    record_decision_log(
+                        db,
+                        ticker=ticker,
+                        strategy_name=STRATEGY_NAME,
+                        result={"action": "error", "reason": str(e)[:50]},
+                        source=source,
+                        strategy_params=DEFAULT_STRATEGY_PARAMS,
+                    )
+                except Exception as log_error:
+                    print(f"[스케줄러] 에러 로그 저장 실패: {log_error}")
 
         db.commit()
+    finally:
+        db.close()
+
+
+def cleanup_logs_job():
+    db = SessionLocal()
+    try:
+        deleted = cleanup_old_logs(db)
+        if deleted:
+            print(f"[로그 정리] 3일 경과 로그 {deleted}건 삭제")
+    except Exception as e:
+        db.rollback()
+        print(f"[로그 정리] 실패: {e}")
     finally:
         db.close()
 
@@ -122,9 +148,20 @@ def start_scheduler():
         seconds=interval,
         id="strategy_runner",
         replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    _scheduler.add_job(
+        cleanup_logs_job,
+        "interval",
+        hours=1,
+        id="signal_log_cleanup",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
     )
     _scheduler.start()
-    print(f"[스케줄러] 시작됨 ({interval}초 간격, 후보 상위 {CANDIDATE_LIMIT}개 + 보유종목)")
+    print(f"[스케줄러] 시작됨 ({interval}초 간격, 후보 상위 {CANDIDATE_LIMIT}개 + 보유종목, 로그 1시간 정리)")
 
 
 def stop_scheduler():

@@ -11,3 +11,4 @@ from app.models.momentum_rank import MomentumRank  # noqa: F401
 from app.models.user_kis_credentials import UserKisCredentials
 from app.models.user_strategy_settings import UserStrategySettings
 from app.models.trade_signal_log import TradeSignalLog
+from app.models.position_state import PositionState  # noqa: F401
