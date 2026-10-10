@@ -10,42 +10,100 @@ if (isLoggedIn()) {
     exit;
 }
 
+// 가입 직후·로그인 실패 후에는 이메일을 미리 채워 준다 (한 번 쓰고 지움)
+$prefill = $_SESSION['login_email'] ?? '';
+unset($_SESSION['login_email']);
+
+$error = $_GET['error'] ?? '';
+$nextQs = $next !== '' ? '?next=' . urlencode($next) : '';
+
 include 'includes/header.php';
 ?>
 
-<div style="margin: 40px 4px 24px;">
-    <h2 style="font-size:24px;font-weight:700;margin:0;">로그인</h2>
-    <p class="muted" style="font-size:15px;margin:8px 0 0;">모의투자를 시작해보세요</p>
+<div class="lg">
+    <div class="lg-card">
+        <div class="lg-mark">모</div>
+        <h1 class="lg-title">다시 만나서 반가워요</h1>
+        <p class="lg-sub">이메일로 로그인하고 모의투자를 이어서 해 보세요.</p>
+
+        <?php if (isset($_GET['joined'])): ?>
+            <div class="lg-alert ok">🎉 <span>가입이 끝났어요! 비밀번호를 입력하면 바로 시작할 수 있어요.</span></div>
+        <?php elseif ($error === 'suspended'): ?>
+            <div class="lg-alert err">⛔ <span>이용이 정지된 계정이에요. 관리자에게 문의해 주세요.</span></div>
+        <?php elseif ($error === 'csrf'): ?>
+            <div class="lg-alert err">⚠️ <span>보안 확인 시간이 지났어요. 다시 한 번 로그인해 주세요.</span></div>
+        <?php elseif ($error !== ''): ?>
+            <div class="lg-alert err">⚠️ <span>이메일 또는 비밀번호가 맞지 않아요.</span></div>
+        <?php elseif ($next !== ''): ?>
+            <div class="lg-alert info">🔒 <span>로그인이 필요한 화면이에요. 로그인하면 바로 이어서 볼 수 있어요.</span></div>
+        <?php endif; ?>
+
+        <form action="login_process.php" method="POST" id="lg-form" novalidate>
+            <?= csrfField() ?>
+            <input type="hidden" name="next" value="<?= htmlspecialchars($next) ?>">
+
+            <div class="lg-field">
+                <label for="lg-email">이메일</label>
+                <div class="lg-input">
+                    <input type="email" id="lg-email" name="email" autocomplete="email" inputmode="email" placeholder="example@email.com"
+                           value="<?= htmlspecialchars($prefill) ?>" required>
+                </div>
+            </div>
+
+            <div class="lg-field">
+                <label for="lg-pw">비밀번호</label>
+                <div class="lg-input has-eye">
+                    <input type="password" id="lg-pw" name="password" autocomplete="current-password" placeholder="비밀번호" required>
+                    <button type="button" class="lg-eye" data-eye="lg-pw" aria-label="비밀번호 보기">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <button type="submit" class="lg-btn" id="lg-submit">로그인</button>
+        </form>
+
+        <p class="lg-foot">아직 회원이 아니신가요?<a href="join.php<?= $nextQs ?>">회원가입</a></p>
+    </div>
 </div>
 
-<?php if ($next !== ''): ?>
-    <div class="alert-t alert-ok">로그인이 필요한 서비스입니다. 로그인하면 바로 이어서 이용할 수 있어요.</div>
-<?php endif; ?>
-<?php if (isset($_GET['joined'])): ?>
-    <div class="alert-t alert-ok">회원가입이 완료되었습니다. 로그인해주세요.</div>
-<?php endif; ?>
-<?php if (($_GET['error'] ?? '') === 'suspended'): ?>
-    <div class="alert-t alert-err">정지된 계정입니다. 관리자에게 문의해주세요.</div>
-<?php elseif (($_GET['error'] ?? '') === 'csrf'): ?>
-    <div class="alert-t alert-err">보안 토큰이 만료되었습니다. 다시 시도해주세요.</div>
-<?php elseif (isset($_GET['error'])): ?>
-    <div class="alert-t alert-err">이메일 또는 비밀번호가 일치하지 않습니다.</div>
-<?php endif; ?>
+<script>
+(function () {
+    'use strict';
+    const form = document.getElementById('lg-form');
+    const email = document.getElementById('lg-email'), pw = document.getElementById('lg-pw'), btn = document.getElementById('lg-submit');
 
-<form action="login_process.php" method="POST">
-    <?= csrfField() ?>
-    <input type="hidden" name="next" value="<?= htmlspecialchars($next) ?>">
-    <label class="label-t">이메일</label>
-    <input type="email" name="email" class="input-t" required style="margin-bottom:14px;">
+    // ⚠️ 버튼을 '두 칸이 다 차야 켜지게' 만들지 않는다.
+    //    크롬이 저장된 비밀번호를 자동으로 채우면, 사용자가 화면을 한 번 누르기 전까지 페이지가 그 값을 못 읽어서
+    //    버튼이 꺼진 채로 남는다(= 로그인을 못 함). 그래서 버튼은 항상 켜 두고, 누를 때 빈칸만 검사한다.
+    function mark(input, bad) { input.closest('.lg-field').classList.toggle('bad', bad); }
+    [email, pw].forEach(el => el.addEventListener('input', () => mark(el, false)));
 
-    <label class="label-t">비밀번호</label>
-    <input type="password" name="password" class="input-t" required style="margin-bottom:24px;">
+    // 이메일이 미리 채워져 있으면 비밀번호 칸부터
+    (email.value ? pw : email).focus();
 
-    <button type="submit" class="btn-t btn-primary-t btn-block">로그인</button>
-</form>
+    // 비밀번호 보기/숨기기
+    document.querySelectorAll('[data-eye]').forEach(b => b.addEventListener('click', () => {
+        const input = document.getElementById(b.dataset.eye);
+        const show = input.type === 'password';
+        input.type = show ? 'text' : 'password';
+        b.setAttribute('aria-label', show ? '비밀번호 숨기기' : '비밀번호 보기');
+        b.style.color = show ? 'var(--primary)' : '';
+    }));
 
-<p style="text-align:center;margin-top:20px;">
-    <a href="join.php" class="muted" style="font-size:14px;font-weight:600;text-decoration:none;">아직 회원이 아니신가요? <span style="color:var(--primary);">회원가입</span></a>
-</p>
+    // 두 번 눌러도 한 번만 보낸다
+    form.addEventListener('submit', e => {
+        if (btn.disabled) { e.preventDefault(); return; }
+        const emptyEmail = !email.value.trim(), emptyPw = !pw.value;
+        if (emptyEmail || emptyPw) {
+            e.preventDefault();
+            mark(email, emptyEmail); mark(pw, emptyPw);
+            (emptyEmail ? email : pw).focus();
+            return;
+        }
+        btn.disabled = true; btn.textContent = '로그인하는 중…';
+    });
+})();
+</script>
 
 <?php include 'includes/footer.php'; ?>

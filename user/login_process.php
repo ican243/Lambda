@@ -16,6 +16,7 @@ $user = getUserByEmail($conn, $email);
 
 // 2. 유저가 없거나, 비밀번호가 틀리면 실패
 if (!$user || !password_verify($password, $user['password'])) {
+    $_SESSION['login_email'] = $email;   // 다시 칠 필요 없게 이메일은 남겨 둔다 (비밀번호는 절대 안 남김)
     header('Location: login.php?error=1' . $backQs);
     exit;
 }
@@ -26,7 +27,8 @@ if (($user['status'] ?? 'active') === 'suspended') {
     exit;
 }
 
-// 3. 로그인 성공 → 세션에 유저 정보 저장
+// 3. 로그인 성공 → 세션 번호를 새로 발급(세션 고정 공격 방지)한 뒤 유저 정보 저장
+session_regenerate_id(true);
 $_SESSION['user_id'] = $user['id'];
 $_SESSION['nickname'] = $user['nickname'];
 

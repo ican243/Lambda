@@ -1305,3 +1305,58 @@ body {
     .au-table td.c-type { grid-area: tag; }
     .au-table td.c-rate { grid-area: rate; font-weight: 700; }
 }
+
+/* =========================================================
+   섹션25. 로그인 · 회원가입 v2 — 토스형
+   - 클래스 이름은 전부 lg- 로 시작
+   - 가운데 카드 하나 + 큰 제목 + 입력칸마다 바로 아래 안내/오류 한 줄
+   ========================================================= */
+.lg { max-width: 420px; margin: var(--sp-8) auto var(--sp-8); }
+.lg-card { background: var(--card); border-radius: var(--radius-lg); box-shadow: var(--shadow); padding: var(--sp-8) var(--sp-6) var(--sp-6); }
+.lg-mark { width: 48px; height: 48px; border-radius: 14px; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center;
+           font-size: 22px; font-weight: 800; margin-bottom: var(--sp-5); }
+.lg-title { font-size: 26px; font-weight: 700; line-height: 1.35; margin: 0; letter-spacing: -0.03em; }
+.lg-sub { font-size: var(--fs-md); color: var(--text-sub); margin: var(--sp-2) 0 var(--sp-6); line-height: 1.5; word-break: keep-all; }   /* 한국어는 단어 중간에서 줄바꿈하지 않게 */
+.lg-sub b { color: var(--primary); }
+
+.lg-alert { display: flex; gap: var(--sp-2); align-items: flex-start; word-break: keep-all; padding: var(--sp-3) var(--sp-4); border-radius: var(--radius-md);
+            font-size: var(--fs-sm); font-weight: 600; line-height: 1.5; margin-bottom: var(--sp-5); }
+.lg-alert.ok   { background: #e8f7ee; color: #0e9f5a; }
+.lg-alert.info { background: var(--primary-weak); color: #1b64da; }
+.lg-alert.err  { background: #fdecee; color: var(--up); }
+
+.lg-field { margin-bottom: var(--sp-4); }
+.lg-field label { display: block; font-size: var(--fs-sm); font-weight: 600; color: #4e5968; margin: 0 2px var(--sp-2); }
+.lg-input { position: relative; }
+.lg-input input { width: 100%; height: 54px; border: 1.5px solid transparent; background: var(--fill); border-radius: var(--radius-md);
+                  padding: 0 var(--sp-4); font-family: inherit; font-size: 16px; color: var(--text); outline: none;   /* 16px 미만이면 iOS 자동확대 */
+                  transition: background .15s, border-color .15s; }
+.lg-input input::placeholder { color: #b0b8c1; }
+.lg-input input:focus { background: #fff; border-color: var(--primary); }
+.lg-field.bad .lg-input input { background: #fff; border-color: var(--up); }
+.lg-field.good .lg-input input { border-color: transparent; }
+.lg-input.has-eye input { padding-right: 52px; }
+.lg-eye { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; border: none; background: none;
+          border-radius: var(--radius-sm); color: #8b95a1; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.lg-eye:hover { background: #e5e8eb; color: var(--text); }
+.lg-hint { font-size: var(--fs-xs); color: var(--text-sub); margin: 6px 2px 0; min-height: 16px; line-height: 1.4; }
+.lg-field.bad .lg-hint { color: var(--up); font-weight: 600; }
+.lg-field.good .lg-hint { color: #0e9f5a; font-weight: 600; }
+
+.lg-btn { width: 100%; height: 56px; border: none; border-radius: var(--radius-md); background: var(--primary); color: #fff; font-family: inherit;
+          font-size: var(--fs-lg); font-weight: 700; cursor: pointer; margin-top: var(--sp-2); transition: background .15s, opacity .15s, transform .05s; }
+.lg-btn:hover { background: #1b74e4; }
+.lg-btn:active { transform: scale(.99); }
+.lg-btn:disabled { opacity: .45; cursor: default; transform: none; }
+.lg-foot { text-align: center; font-size: var(--fs-md); color: var(--text-sub); margin-top: var(--sp-5); }
+.lg-foot a { color: var(--primary); font-weight: 700; text-decoration: none; margin-left: var(--sp-1); }
+.lg-foot a:hover { text-decoration: underline; }
+
+.lg-perks { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin: calc(var(--sp-2) * -1) 0 var(--sp-6); }
+.lg-perks span { font-size: var(--fs-xs); font-weight: 600; color: #4e5968; background: var(--fill); border-radius: 999px; padding: 5px var(--sp-3); }
+
+@media (max-width: 480px) {
+    .lg { margin-top: var(--sp-4); }
+    .lg-card { padding: var(--sp-6) var(--sp-5) var(--sp-5); }
+    .lg-title { font-size: var(--fs-xl); }
+}
