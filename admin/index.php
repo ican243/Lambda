@@ -33,37 +33,11 @@ $topLoss    = getLeaderboard($conn, 'bottom');
 $topStocks  = getTopWatchedStocks($conn);
 $recentOrders = getRecentOrders($conn);
 
-// 시스템 상태
-$lastCollect = getLastCollectTime($conn);
-$collectAge  = $lastCollect ? (time() - strtotime($lastCollect)) : null;   // 초
-$wsAlive     = isWsAlive();
-$tokenExp    = getKisTokenExpiry();                        // KIS 토큰 만료(unix) or null
-$tokenLeft   = $tokenExp ? ($tokenExp - time()) : null;    // 남은 초
-$todayErrors = getTodayErrorCount($conn);
+// 이상 거래 감지 · 에러 로그
 $fdsIps      = getFdsMultiAccountIps($conn);
 $fdsRapid    = getFdsRapidTraders($conn);
 $errors      = getRecentErrors($conn);
 
-// 상태 판정 → [점 색(ok|warn|bad|''), 문구]
-function ageBadge($age) {
-    if ($age === null) return ['', '데이터 없음'];
-    if ($age < 120)   return ['ok', '실시간'];
-    if ($age < 600)   return ['warn', '최근 수집'];
-    return ['bad', '수집 지연'];
-}
-[$collectColor, $collectText] = ageBadge($collectAge);
-function agoText($sec) {
-    if ($sec === null) return '-';
-    if ($sec < 60) return $sec . '초 전';
-    if ($sec < 3600) return floor($sec / 60) . '분 전';
-    if ($sec < 86400 * 2) return floor($sec / 3600) . '시간 전';
-    return floor($sec / 86400) . '일 전';
-}
-// KIS 토큰 남은 시간 → [점 색, 문구]
-if ($tokenLeft === null)     [$tokenColor, $tokenText] = ['', '정보 없음'];
-elseif ($tokenLeft <= 0)     [$tokenColor, $tokenText] = ['bad', '만료됨'];
-elseif ($tokenLeft < 3600)   [$tokenColor, $tokenText] = ['warn', '곧 만료 (' . floor($tokenLeft / 60) . '분 남음)'];
-else                         [$tokenColor, $tokenText] = ['ok', number_format(floor($tokenLeft / 3600)) . '시간 남음'];
 $initialCash = getInitialCash($conn);   // 수익률 순위의 기준 (관리자가 설정한 값)
 $moneyFmt = function ($v) {             // 큰 금액은 억/만 단위로 (카드에서 한눈에)
     $v = (int) $v;
@@ -81,37 +55,13 @@ include 'includes/header.php';
 <div class="ad-head">
     <div>
         <h1>대시보드</h1>
-        <p>서비스가 잘 돌아가는지, 사람들이 어떻게 거래하는지 한눈에 봐요.</p>
-    </div>
-</div>
-
-<!-- ===== 운영 상태 ===== -->
-<div class="ad-grid c4">
-    <div class="ad-card ad-kpi">
-        <div class="k"><span class="ad-dot <?= $collectColor ?>"></span>시세 수집</div>
-        <div class="v"><?= $collectText ?></div>
-        <div class="s">마지막 <?= agoText($collectAge) ?><?= $lastCollect ? '<br>' . htmlspecialchars(substr($lastCollect, 0, 16)) : '' ?></div>
-    </div>
-    <div class="ad-card ad-kpi">
-        <div class="k"><span class="ad-dot <?= $wsAlive ? 'ok' : 'bad' ?>"></span>실시간 서버</div>
-        <div class="v"><?= $wsAlive ? '연결됨' : '끊김' ?></div>
-        <div class="s">stock-ws · 포트 8080</div>
-    </div>
-    <div class="ad-card ad-kpi">
-        <div class="k"><span class="ad-dot <?= $tokenColor ?>"></span>KIS API 토큰</div>
-        <div class="v"><?= $tokenText ?></div>
-        <div class="s">만료되면 자동 재발급</div>
-    </div>
-    <div class="ad-card ad-kpi">
-        <div class="k"><span class="ad-dot <?= $todayErrors > 0 ? 'bad' : 'ok' ?>"></span>오늘 에러</div>
-        <div class="v <?= $todayErrors > 0 ? 'up' : '' ?>"><?= number_format($todayErrors) ?>건</div>
-        <div class="s">시세 데이터 누적 <?= number_format(getTotalLogCount($conn)) ?>건</div>
+        <p>회원들이 어떻게 거래하고 있는지 한눈에 봐요.</p>
     </div>
 </div>
 
 <!-- ===== 이상 거래 감지 (FDS) ===== -->
 <?php if ($fdsIps || $fdsRapid): ?>
-<div class="ad-card warn" style="margin-top:var(--sp-4);">
+<div class="ad-card warn">
     <div class="ad-card-h"><span class="ad-card-t">🚨 이상 징후 감지 <small>FDS · 규칙 기반</small></span></div>
     <div class="ad-grid c2">
         <?php if ($fdsIps): ?>
