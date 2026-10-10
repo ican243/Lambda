@@ -4,217 +4,303 @@ require_once 'func.php';
 startUserSession();
 
 if (!isLoggedIn()) {
-    header('Location: login.php');
+    header('Location: login.php?next=trade.php');
     exit;
 }
 
-$account = getMyAccount($conn, $_SESSION['user_id']);
-$holdings = getMyHoldings($conn, $_SESSION['user_id']);
-$orders = getMyOrders($conn, $_SESSION['user_id']);
+$uid      = $_SESSION['user_id'];
+$account  = getMyAccount($conn, $uid);
+$holdings = getMyHoldings($conn, $uid);
+$orders   = getMyOrders($conn, $uid);
+$initial  = getInitialCashAmount($conn);   // 시작 금액 (관리자 설정, 기본 1,000만원)
 
-// 총 평가금액 = 현금 + 보유종목 평가액
-$stockValue = 0;
-foreach ($holdings as $h) {
-    if ($h['current_price']) $stockValue += $h['current_price'] * $h['quantity'];
-}
-$totalAsset = $account['cash_balance'] + $stockValue;
+// 화면에 넘길 데이터 — 계산과 그리기는 아래 JS 가 한 곳에서 한다 (30초 갱신·실시간 시세도 같은 함수로)
+$holdJs = array_map(fn($h) => [
+    'code'     => $h['stock_code'],
+    'name'     => $h['stock_name'],
+    'qty'      => (int) $h['quantity'],
+    'avg'      => (float) $h['avg_price'],
+    'price'    => $h['current_price'] ? (int) $h['current_price'] : null,
+    'price_at' => $h['price_at'],
+], $holdings);
+$orderJs = array_map(fn($o) => [
+    'code'  => $o['stock_code'],
+    'name'  => $o['stock_name'],
+    'type'  => $o['order_type'],
+    'qty'   => (int) $o['quantity'],
+    'price' => (float) $o['price'],
+    'total' => (int) $o['total_amount'],
+    'at'    => $o['created_at'],
+    'auto'  => (int) ($o['is_auto'] ?? 0),
+], $orders);
 
+$pageWide = true;
 include 'includes/header.php';
 ?>
 
-<!-- 보유종목/주문내역 위젯(이동): 로컬 라이브러리 (CDN 왕복 제거) -->
-<link href="assets/gridstack.min.css" rel="stylesheet">
-<script src="assets/gridstack-all.js"></script>
-
-<div style="margin: 12px 0 8px;">
-    <a href="index.php" class="muted" style="text-decoration:none;font-size:15px;font-weight:600;">← 목록</a>
-</div>
-
-<?php if (isset($_GET['error'])): ?>
-    <div class="alert-t alert-err"><?= htmlspecialchars($_GET['error']) ?></div>
-<?php endif; ?>
-<?php if (isset($_GET['success'])): ?>
-    <div class="alert-t alert-ok"><?= htmlspecialchars($_GET['success']) ?></div>
-<?php endif; ?>
-
-<!-- 총 자산 히어로 카드 (실시간 갱신) -->
-<div class="card-t" style="background:linear-gradient(135deg,#3182f6,#1b64da);color:#fff;">
-    <div style="font-size:14px;font-weight:600;opacity:.85;display:flex;align-items:center;gap:6px;">
-        총 평가자산 <span id="live-dot" style="width:7px;height:7px;border-radius:50%;background:#9be7b4;display:inline-block;transition:opacity .3s;"></span>
+<div class="acct" id="acct" data-mtab="hold">
+    <div class="acct-title">
+        <h1>내 계좌</h1>
+        <span><?= htmlspecialchars($_SESSION['nickname'] ?? '') ?>님</span>
     </div>
-    <div id="total-asset" style="font-size:30px;font-weight:700;margin:6px 0 16px;"><?= number_format($totalAsset) ?>원</div>
-    <div style="display:flex;justify-content:space-between;font-size:14px;opacity:.9;">
-        <span>주문가능 현금</span><span style="font-weight:600;"><?= number_format($account['cash_balance']) ?>원</span>
-    </div>
-    <div style="display:flex;justify-content:space-between;font-size:14px;opacity:.9;margin-top:6px;">
-        <span>보유주식 평가액</span><span style="font-weight:600;" id="stock-value"><?= number_format($stockValue) ?>원</span>
-    </div>
-</div>
 
-<!-- 내 계좌 위젯(끌어서 순서 변경 · 세로 크기조절): stock_detail.php 대시보드와 같은 방식 -->
-<div class="dv-bar" style="margin-top:4px;">
-    <span class="section-title" style="margin:0;">내 계좌</span>
-    <div class="dv-tools" id="dv-tools">
-        <span class="dv-hint"><svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="4" r="1.3"/><circle cx="11" cy="4" r="1.3"/><circle cx="5" cy="8" r="1.3"/><circle cx="11" cy="8" r="1.3"/><circle cx="5" cy="12" r="1.3"/><circle cx="11" cy="12" r="1.3"/></svg> 끌어서 순서 변경 · 아래로 늘려서 더보기</span>
-        <button class="dv-reset" onclick="resetTradeLayout()">배치 초기화</button>
-    </div>
-</div>
+    <?php if (isset($_GET['error'])): ?>
+        <div class="acct-alert err">⚠️ <?= htmlspecialchars($_GET['error']) ?></div>
+    <?php endif; ?>
+    <?php if (isset($_GET['success'])): ?>
+        <div class="acct-alert ok">✅ <?= htmlspecialchars($_GET['success']) ?></div>
+    <?php endif; ?>
 
-<div id="trade-grid" class="grid-stack">
-    <!-- 보유 종목 -->
-    <div class="grid-stack-item" gs-id="holdings" gs-w="1" gs-h="6" gs-min-h="3">
-        <div class="grid-stack-item-content widget" data-w="holdings">
-            <div class="widget-h"><span class="wt">보유 종목</span><span class="drag-handle" title="끌어서 이동"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="4" r="1.4"/><circle cx="11" cy="4" r="1.4"/><circle cx="5" cy="8" r="1.4"/><circle cx="11" cy="8" r="1.4"/><circle cx="5" cy="12" r="1.4"/><circle cx="11" cy="12" r="1.4"/></svg></span></div>
-            <?php if (!$holdings): ?>
-                <div class="muted" style="text-align:center;font-size:14px;padding:30px 0;">보유 중인 종목이 없습니다</div>
-            <?php else: ?>
-                <div class="tick-scroll">
-                    <div class="stock-list">
-                        <?php foreach ($holdings as $h):
-                            $profit = $h['current_price'] ? ($h['current_price'] - $h['avg_price']) * $h['quantity'] : null;
-                            $rate = ($h['current_price'] && $h['avg_price']) ? ($h['current_price'] - $h['avg_price']) / $h['avg_price'] * 100 : null;
-                            $cls = $profit > 0 ? 'up' : ($profit < 0 ? 'down' : 'muted');
-                        ?>
-                            <a class="stock-row" href="stock_detail.php?code=<?= $h['stock_code'] ?>"
-                                data-code="<?= $h['stock_code'] ?>" data-qty="<?= (int) $h['quantity'] ?>" data-avg="<?= (float) $h['avg_price'] ?>">
-                                <div class="stock-logo"><?= mb_substr($h['stock_name'], 0, 1) ?></div>
-                                <div class="stock-name">
-                                    <div class="nm"><?= htmlspecialchars($h['stock_name']) ?></div>
-                                    <div class="cd"><?= number_format($h['quantity']) ?>주 · 평단 <?= number_format($h['avg_price']) ?>원</div>
-                                </div>
-                                <div class="stock-price">
-                                    <div class="pr hold-cur"><?= $h['current_price'] ? number_format($h['current_price']) . '원' : '-' ?></div>
-                                    <div class="rt hold-pl <?= $cls ?>">
-                                        <?= $profit !== null ? ($profit > 0 ? '+' : '') . number_format($profit) . '원' : '-' ?>
-                                        <?= $rate !== null ? ' (' . ($rate > 0 ? '+' : '') . number_format($rate, 2) . '%)' : '' ?>
-                                    </div>
-                                </div>
-                            </a>
-                        <?php endforeach; ?>
-                    </div>
-                </div>
-            <?php endif; ?>
+    <!-- ===== 총 자산 ===== -->
+    <section class="acct-hero">
+        <div class="acct-hero-k">총 자산 <span class="sd-live" id="acct-live"><i></i>실시간</span> <span class="acct-asof" id="acct-asof" hidden></span></div>
+        <div class="acct-total" id="acct-total">—</div>
+        <div class="acct-total-sub"><span class="lbl">시작 금액 <?= number_format($initial / 10000) ?>만원보다</span><span id="acct-vs-start">—</span></div>
+
+        <div class="acct-mix">
+            <div class="acct-mix-bar"><span class="stock" id="acct-mix-stock" style="width:0%"></span><span class="cash"></span></div>
+            <div class="acct-mix-legend">
+                <span><i style="background:var(--primary)"></i>주식 <b id="acct-mix-sp">0%</b></span>
+                <span><i style="background:#c9e2ff"></i>현금 <b id="acct-mix-cp">100%</b></span>
+            </div>
         </div>
+
+        <div class="acct-kpis">
+            <div class="acct-kpi"><div class="k">주문 가능 현금</div><div class="v" id="kpi-cash">—</div></div>
+            <div class="acct-kpi"><div class="k">주식 평가금액</div><div class="v" id="kpi-stock">—</div><div class="s flat" id="kpi-cost">—</div></div>
+            <div class="acct-kpi"><div class="k">투자 손익</div><div class="v" id="kpi-pl">—</div><div class="s" id="kpi-plr">—</div></div>
+        </div>
+    </section>
+
+    <!-- 휴대폰: 보유 종목 ↔ 주문 내역 -->
+    <div class="acct-mtabs" role="tablist">
+        <button type="button" class="on" data-mtab="hold">보유 종목</button>
+        <button type="button" data-mtab="orders">주문 내역</button>
     </div>
 
-    <!-- 주문 내역 -->
-    <div class="grid-stack-item" gs-id="orders" gs-w="1" gs-h="6" gs-min-h="3">
-        <div class="grid-stack-item-content widget" data-w="orders">
-            <div class="widget-h"><span class="wt">주문 내역</span><span class="drag-handle" title="끌어서 이동"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="4" r="1.4"/><circle cx="11" cy="4" r="1.4"/><circle cx="5" cy="8" r="1.4"/><circle cx="11" cy="8" r="1.4"/><circle cx="5" cy="12" r="1.4"/><circle cx="11" cy="12" r="1.4"/></svg></span></div>
-            <?php if (!$orders): ?>
-                <div class="muted" style="text-align:center;font-size:14px;padding:30px 0;">아직 주문 내역이 없습니다</div>
-            <?php else: ?>
-                <div class="tick-scroll">
-                    <div class="stock-list">
-                        <?php foreach ($orders as $o):
-                            $buy = $o['order_type'] === 'buy';
-                        ?>
-                            <div class="stock-row" style="cursor:default;">
-                                <div class="stock-logo" style="background:<?= $buy ? '#fdecee' : '#e8f3ff' ?>;color:<?= $buy ? 'var(--up)' : 'var(--down)' ?>;">
-                                    <?= $buy ? '매수' : '매도' ?>
-                                </div>
-                                <div class="stock-name">
-                                    <div class="nm"><?= htmlspecialchars($o['stock_name']) ?></div>
-                                    <div class="cd"><?= $o['created_at'] ?></div>
-                                </div>
-                                <div class="stock-price">
-                                    <div class="pr"><?= number_format($o['total_amount']) ?>원</div>
-                                    <div class="rt muted"><?= number_format($o['quantity']) ?>주 · <?= number_format($o['price']) ?>원</div>
-                                </div>
-                            </div>
-                        <?php endforeach; ?>
-                    </div>
+    <div class="acct-layout">
+        <!-- ===== 보유 종목 ===== -->
+        <section class="acct-card acct-holds">
+            <div class="acct-card-h">
+                <span class="acct-card-t">보유 종목 <small id="hold-count"></small></span>
+                <div class="acct-chips" id="hold-sort">
+                    <button type="button" class="on" data-sort="value">평가금액순</button>
+                    <button type="button" data-sort="rate">수익률순</button>
+                    <button type="button" data-sort="name">이름순</button>
                 </div>
-            <?php endif; ?>
-        </div>
+            </div>
+            <div id="hold-list"></div>
+        </section>
+
+        <!-- ===== 주문 내역 ===== -->
+        <section class="acct-card acct-orders">
+            <div class="acct-card-h">
+                <span class="acct-card-t">주문 내역</span>
+                <div class="acct-chips" id="ord-filter">
+                    <button type="button" class="on" data-f="all">전체</button>
+                    <button type="button" data-f="buy">구매</button>
+                    <button type="button" data-f="sell">판매</button>
+                </div>
+            </div>
+            <div class="acct-scroll" id="ord-list"></div>
+        </section>
     </div>
 </div>
 
 <script>
-    // ---------- 내 계좌 위젯 (gridstack: 이동 + 세로 리사이즈) ----------
-    // stock_detail.php의 위젯 대시보드와 같은 방식, 저장 키만 이 페이지 전용으로 분리.
-    const TRADE_LAYOUT_KEY = 'moa_trade_layout_v1';
-    const tradeGrid = GridStack.init({
-        column: 1,
-        cellHeight: 60,
-        margin: 10,
-        float: false,
-        handle: '.drag-handle',
-        resizable: { handles: 's' },   // 좁은 1열 레이아웃이라 세로로만 크기조절
-    }, document.getElementById('trade-grid'));
+(function () {
+    'use strict';
+    const INITIAL = <?= (int) $initial ?>;
+    let cash      = <?= (int) $account['cash_balance'] ?>;
+    let holds     = <?= json_encode($holdJs, JSON_UNESCAPED_UNICODE) ?>;
+    const orders  = <?= json_encode($orderJs, JSON_UNESCAPED_UNICODE) ?>;
 
-    function saveTradeLayout() {
-        try { localStorage.setItem(TRADE_LAYOUT_KEY, JSON.stringify(tradeGrid.save(false))); } catch (e) {}
-    }
-    (function restoreTradeLayout() {
-        let saved;
-        try { saved = JSON.parse(localStorage.getItem(TRADE_LAYOUT_KEY)); } catch { saved = null; }
-        if (Array.isArray(saved) && saved.length) tradeGrid.load(saved);
-    })();
-    tradeGrid.on('change', saveTradeLayout);
-    tradeGrid.on('resizestop', saveTradeLayout);
-
-    function resetTradeLayout() {
-        localStorage.removeItem(TRADE_LAYOUT_KEY);
-        location.reload();
+    const $ = id => document.getElementById(id);
+    const num  = n => Math.round(Number(n) || 0).toLocaleString('ko-KR');
+    const won  = n => num(n) + '원';
+    const sign = n => (n > 0 ? '+' : '');
+    const cls  = n => n > 0 ? 'up' : (n < 0 ? 'down' : 'flat');
+    const esc  = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const plTxt = (pl, rate) => `${sign(pl)}${won(pl)} (${sign(rate)}${rate.toFixed(2)}%)`;
+    function flash(el, up) {
+        if (!el) return;
+        el.classList.remove('sd-flash-up', 'sd-flash-down');
+        void el.offsetWidth;                         // 애니메이션을 처음부터 다시 재생시키는 요령
+        el.classList.add(up ? 'sd-flash-up' : 'sd-flash-down');
     }
 
-    // ---------------------------------------------
-    // 실시간 갱신 (보유종목 현재가·평가손익·총자산)
-    // 토스처럼 새로고침 없이 시세가 오면 바로 반영된다.
-    // ---------------------------------------------
-    const holdData = <?= json_encode(array_map(function ($h) {
-        return [
-            'code'  => $h['stock_code'],
-            'qty'   => (int) $h['quantity'],
-            'avg'   => (float) $h['avg_price'],
-            'price' => $h['current_price'] ? (int) $h['current_price'] : null,
-        ];
-    }, $holdings), JSON_UNESCAPED_UNICODE) ?>;
-    const cashBalance = <?= (int) $account['cash_balance'] ?>;
-
-    const num = n => Number(n).toLocaleString();
-
-    // 총 평가자산 재계산 = 현금 + Σ(보유수량 × 현재가)
-    function recalcTotal() {
-        let stockVal = 0;
-        holdData.forEach(h => { if (h.price) stockVal += h.price * h.qty; });
-        const sv = document.getElementById('stock-value');
-        const ta = document.getElementById('total-asset');
-        if (sv) sv.textContent = num(stockVal) + '원';
-        if (ta) ta.textContent = num(cashBalance + stockVal) + '원';
+    // 종목 하나의 숫자 (가격이 없으면 평균단가로 계산 → 손익 0 으로 보이게)
+    function calc(h) {
+        const p = h.price || h.avg;
+        const value = p * h.qty, cost = h.avg * h.qty, pl = value - cost;
+        return { value, cost, pl, rate: cost ? pl / cost * 100 : 0 };
     }
 
-    const tradeSocket = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/');
-    tradeSocket.onmessage = (event) => {
-        const d = JSON.parse(event.data);
-        const h = holdData.find(x => x.code === d.stock_code);
-        if (!h) return;                    // 내 보유종목이 아니면 무시
-        h.price = d.price;
+    // ================= 총 자산 =================
+    function renderSummary() {
+        let stock = 0, cost = 0;
+        holds.forEach(h => { const c = calc(h); stock += c.value; cost += c.cost; });
+        const total = cash + stock, pl = stock - cost, plr = cost ? pl / cost * 100 : 0;
+        const vs = total - INITIAL, vsr = INITIAL ? vs / INITIAL * 100 : 0;
 
-        const row = document.querySelector(`.stock-row[data-code="${d.stock_code}"]`);
-        if (row) {
-            const profit = (d.price - h.avg) * h.qty;
-            const rate = h.avg ? (d.price - h.avg) / h.avg * 100 : 0;
-            const cls = profit > 0 ? 'up' : (profit < 0 ? 'down' : 'muted');
-            row.querySelector('.hold-cur').textContent = num(d.price) + '원';
-            const pl = row.querySelector('.hold-pl');
-            pl.textContent = `${profit > 0 ? '+' : ''}${num(Math.round(profit))}원 (${rate > 0 ? '+' : ''}${rate.toFixed(2)}%)`;
-            pl.className = 'rt hold-pl ' + cls;
-            row.classList.remove('flash-up', 'flash-down');
-            void row.offsetWidth;
-            row.classList.add(d.change_price >= 0 ? 'flash-up' : 'flash-down');
+        const t = $('acct-total'), before = t.dataset.v ? Number(t.dataset.v) : null;
+        t.textContent = won(total); t.dataset.v = Math.round(total);
+        if (before !== null && Math.round(total) !== before) flash(t, total > before);
+
+        $('acct-vs-start').textContent = plTxt(vs, vsr); $('acct-vs-start').className = cls(Math.round(vs));
+        const sp = total ? Math.round(stock / total * 100) : 0;
+        $('acct-mix-stock').style.width = sp + '%';
+        $('acct-mix-sp').textContent = sp + '%'; $('acct-mix-cp').textContent = (100 - sp) + '%';
+
+        $('kpi-cash').textContent = won(cash);
+        $('kpi-stock').textContent = won(stock);
+        $('kpi-cost').innerHTML = `투자 원금 <span class="nw">${won(cost)}</span>`;
+        $('kpi-pl').textContent = sign(pl) + won(pl); $('kpi-pl').className = 'v ' + cls(Math.round(pl));
+        $('kpi-plr').textContent = sign(plr) + plr.toFixed(2) + '%'; $('kpi-plr').className = 's ' + cls(Math.round(pl));
+
+        // 시세가 오늘 것이 아니면(실시간 수집 중단 등) 기준 날짜를 알려준다
+        const today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);   // 한국 날짜
+        const dates = holds.map(h => (h.price_at || '').slice(0, 10)).filter(Boolean).sort();
+        const latest = dates[dates.length - 1];
+        const asof = $('acct-asof');
+        if (latest && latest < today) { asof.textContent = `${+latest.slice(5, 7)}월 ${+latest.slice(8, 10)}일 시세 기준`; asof.hidden = false; }
+        else asof.hidden = true;
+    }
+
+    // ================= 보유 종목 =================
+    let sortBy = 'value';
+    function logo(code, name) {
+        let hash = 0; for (const ch of code) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+        return `<span class="acct-logo" style="background:hsl(${hash % 360},62%,62%)"><img src="assets/logos/${esc(code)}.png" alt="" onerror="this.remove()">${esc(name.slice(0, 1))}</span>`;
+    }
+    function renderHolds() {
+        $('hold-count').textContent = holds.length || '';
+        const box = $('hold-list');
+        if (!holds.length) {
+            box.innerHTML = `<div class="acct-empty"><div class="ico">🌱</div><div class="tt">아직 산 주식이 없어요</div>`
+                + `<div class="ds">관심 있는 종목을 골라 첫 주식을 사 보세요.</div><a href="index.php">주식 둘러보기</a></div>`;
+            return;
         }
-        recalcTotal();
+        const rows = holds.map(h => ({ h, c: calc(h) }));
+        rows.sort((a, b) => sortBy === 'rate' ? b.c.rate - a.c.rate
+                          : sortBy === 'name' ? a.h.name.localeCompare(b.h.name, 'ko')
+                          : b.c.value - a.c.value);
+        let cost = 0, value = 0;
+        box.innerHTML = rows.map(({ h, c }) => {
+            cost += c.cost; value += c.value;
+            return `<a class="acct-row" href="stock_detail.php?code=${esc(h.code)}" data-code="${esc(h.code)}">`
+                + logo(h.code, h.name)
+                + `<div class="acct-name"><div class="nm">${esc(h.name)}</div><div class="sub">${num(h.qty)}주 · 평균 <span class="nw">${won(h.avg)}</span></div></div>`
+                + `<div class="acct-val"><div class="v">${won(c.value)}</div><div class="pl ${cls(Math.round(c.pl))}">${plTxt(c.pl, c.rate)}</div></div></a>`;
+        }).join('')
+        + `<div class="acct-foot"><span>현재가 기준 평가금액</span><b>${won(value)}</b></div>`;
+    }
+    $('hold-sort').addEventListener('click', e => {
+        const b = e.target.closest('button[data-sort]'); if (!b) return;
+        sortBy = b.dataset.sort;
+        document.querySelectorAll('#hold-sort button').forEach(x => x.classList.toggle('on', x === b));
+        renderHolds();
+    });
 
-        // 실시간 표시등 깜빡
-        const dot = document.getElementById('live-dot');
-        if (dot) { dot.style.opacity = '0.3'; setTimeout(() => dot.style.opacity = '1', 200); }
-    };
-    tradeSocket.onclose = () => {
-        const dot = document.getElementById('live-dot');
-        if (dot) dot.style.background = '#c9cdd2';   // 연결 끊기면 회색
-    };
+    // ================= 주문 내역 (날짜별 묶음 · 필터 · 더 보기) =================
+    const PAGE = 20;
+    let filter = 'all', shown = PAGE;
+    const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
+    function dayLabel(d) {                         // '2026-10-10' → '10월 10일 (토)', 오늘·어제는 말로
+        const today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
+        const yest  = new Date(Date.now() + 9 * 3600e3 - 86400e3).toISOString().slice(0, 10);
+        if (d === today) return '오늘';
+        if (d === yest) return '어제';
+        const dt = new Date(d + 'T00:00:00Z');
+        return `${dt.getUTCMonth() + 1}월 ${dt.getUTCDate()}일 (${WEEK[dt.getUTCDay()]})`;
+    }
+    function renderOrders() {
+        const box = $('ord-list');
+        const list = orders.filter(o => filter === 'all' || o.type === filter);
+        if (!list.length) {
+            box.innerHTML = `<div class="acct-empty"><div class="ico">🧾</div><div class="tt">${filter === 'all' ? '아직 주문 내역이 없어요' : (filter === 'buy' ? '구매' : '판매') + ' 내역이 없어요'}</div>`
+                + `<div class="ds">주식을 사고팔면 여기에 기록돼요.</div></div>`;
+            return;
+        }
+        let html = '', lastDay = '';
+        list.slice(0, shown).forEach(o => {
+            const day = (o.at || '').slice(0, 10);
+            if (day !== lastDay) { html += `<div class="acct-day">${dayLabel(day)}</div>`; lastDay = day; }
+            const buy = o.type === 'buy';
+            html += `<a class="acct-ord" href="stock_detail.php?code=${esc(o.code)}">`
+                + `<span class="acct-tag ${o.type}">${buy ? '구매' : '판매'}</span>`
+                + `<div style="min-width:0"><div class="nm">${esc(o.name)}${o.auto ? '<span class="acct-auto">자동</span>' : ''}</div>`
+                + `<div class="sub">${(o.at || '').slice(11, 16)} · ${num(o.qty)}주 · ${won(o.price)}</div></div>`
+                + `<div class="amt">${won(o.total)}</div></a>`;
+        });
+        if (list.length > shown) html += `<button type="button" class="acct-more" id="ord-more">더 보기 (${num(list.length - shown)}건 남음)</button>`;
+        box.innerHTML = html;
+        $('ord-more')?.addEventListener('click', () => { shown += PAGE; renderOrders(); });
+    }
+    $('ord-filter').addEventListener('click', e => {
+        const b = e.target.closest('button[data-f]'); if (!b) return;
+        filter = b.dataset.f; shown = PAGE;
+        document.querySelectorAll('#ord-filter button').forEach(x => x.classList.toggle('on', x === b));
+        renderOrders();
+    });
+
+    // 휴대폰 탭
+    document.querySelector('.acct-mtabs').addEventListener('click', e => {
+        const b = e.target.closest('button[data-mtab]'); if (!b) return;
+        $('acct').dataset.mtab = b.dataset.mtab;
+        document.querySelectorAll('.acct-mtabs button').forEach(x => x.classList.toggle('on', x === b));
+    });
+
+    // ================= 가격 갱신 =================
+    // 1) 실시간: 홈 화면 종목은 실시간 서버가 계속 보내 준다 → 내 보유 종목이면 바로 반영
+    // 2) 30초마다: 나머지 보유 종목 가격 + 현금을 다시 받아온다 (메인 화면과 같은 방식)
+    function applyPrice(code, price) {
+        const h = holds.find(x => x.code === code);
+        if (!h || !price || h.price === price) return;
+        const up = price > (h.price || 0);
+        h.price = price;
+        h.price_at = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 19).replace('T', ' ');
+        renderHolds(); renderSummary();
+        flash(document.querySelector(`.acct-row[data-code="${code}"] .v`), up);
+        const live = $('acct-live'); live.classList.add('on'); clearTimeout(live._t);
+        live._t = setTimeout(() => live.classList.remove('on'), 4000);
+    }
+    async function poll() {
+        try {
+            const res = await fetch('get_holdings.php');
+            if (res.status === 401) { location.href = 'login.php?next=trade.php'; return; }
+            if (!res.ok) return;
+            const d = await res.json();
+            cash = d.cash;
+            const old = Object.fromEntries(holds.map(h => [h.code, h.price]));
+            holds = d.holdings;
+            renderHolds(); renderSummary();
+            holds.forEach(h => {
+                if (old[h.code] && h.price && h.price !== old[h.code]) flash(document.querySelector(`.acct-row[data-code="${h.code}"] .v`), h.price > old[h.code]);
+            });
+        } catch (e) { /* 네트워크 일시 오류는 다음 주기에 다시 */ }
+    }
+    setInterval(() => { if (!document.hidden) poll(); }, 30000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });   // 다른 탭 갔다 오면 바로 최신화
+
+    let tries = 0;
+    (function connect() {
+        let ws;
+        try { ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/'); }
+        catch (e) { return; }
+        ws.onopen = () => { tries = 0; };
+        ws.onmessage = ev => {
+            let d; try { d = JSON.parse(ev.data); } catch (e) { return; }
+            if (d.type && d.type !== 'price') return;          // 호가·체결 메시지는 이 화면에서 안 씀
+            applyPrice(d.stock_code, d.price);
+        };
+        ws.onclose = () => { tries++; setTimeout(connect, Math.min(15000, 1000 * 2 ** Math.min(tries - 1, 4))); };   // 끊기면 자동 재연결
+    })();
+
+    renderSummary();
+    renderHolds();
+    renderOrders();
+})();
 </script>
 
 <?php include 'includes/footer.php'; ?>

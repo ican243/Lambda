@@ -936,3 +936,125 @@ body {
     .sd-info { grid-template-columns: 1fr; }
     .sd-ob-head, .sd-ob-row, .sd-ob-sum { grid-template-columns: 1fr 104px 1fr; }
 }
+
+/* =========================================================
+   섹션22. 내 계좌 v2 — 토스형 고정 배치
+   - 클래스 이름은 전부 acct- 로 시작 (다른 화면과 안 겹치게)
+   - 여백·글자·모서리·색은 섹션2의 공통 변수만 사용 → 종목 상세와 같은 느낌
+   - PC: 위 [총 자산] / 아래 왼쪽 [보유 종목] · 오른쪽 [주문 내역]
+   - 휴대폰(900px 이하): 보유 종목 ↔ 주문 내역 탭 전환
+   ========================================================= */
+.acct { font-variant-numeric: tabular-nums; }
+.acct .up   { color: var(--up); }
+.acct .down { color: var(--down); }
+.acct .flat { color: var(--flat); }
+
+.acct-title { display: flex; align-items: baseline; gap: var(--sp-2); margin: var(--sp-2) 0 var(--sp-5); }
+.acct-title h1 { font-size: var(--fs-xl); font-weight: 700; margin: 0; }
+.acct-title span { font-size: var(--fs-md); color: var(--text-sub); }
+
+/* 알림 (주문 결과 등) */
+.acct-alert { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); border-radius: var(--radius-md);
+              font-size: var(--fs-md); font-weight: 600; margin-bottom: var(--sp-4); }
+.acct-alert.ok  { background: #e8f7ee; color: #0e9f5a; }
+.acct-alert.err { background: #fdecee; color: var(--up); }
+
+/* ---------- 총 자산 카드 ---------- */
+.acct-hero { background: var(--card); border-radius: var(--radius-lg); box-shadow: var(--shadow); padding: var(--sp-6); margin-bottom: var(--sp-5); }
+.acct-hero-k { font-size: var(--fs-md); color: var(--text-sub); font-weight: 600; display: flex; align-items: center; gap: var(--sp-2); }
+.acct-total { font-size: var(--fs-hero); font-weight: 700; letter-spacing: -0.03em; margin-top: var(--sp-1); line-height: 1.25;
+              display: inline-block; border-radius: 8px; padding: 0 var(--sp-1); margin-left: calc(var(--sp-1) * -1); }
+.acct-total-sub { font-size: var(--fs-md); font-weight: 600; margin-top: var(--sp-1); }
+.acct-total-sub .lbl { color: var(--text-sub); font-weight: 500; margin-right: var(--sp-1); }
+.acct-asof { font-size: var(--fs-xs); color: #b45309; background: #fff7e6; border-radius: 6px; padding: 2px var(--sp-2); font-weight: 600; }
+
+/* 주식 / 현금 비율 막대 */
+.acct-mix { margin-top: var(--sp-5); }
+.acct-mix-bar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--fill); }
+.acct-mix-bar .stock { background: var(--primary); transition: width .4s ease; }
+.acct-mix-bar .cash  { background: #c9e2ff; flex: 1; }
+.acct-mix-legend { display: flex; gap: var(--sp-4); font-size: var(--fs-sm); color: var(--text-sub); margin-top: var(--sp-2); }
+.acct-mix-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: 0; }
+
+.acct-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-3); margin-top: var(--sp-5); }
+.acct-kpi { background: #f9fafb; border-radius: var(--radius); padding: var(--sp-4); min-width: 0; }
+.acct-kpi .k { font-size: var(--fs-sm); color: var(--text-sub); font-weight: 600; }
+.acct-kpi .v { font-size: var(--fs-lg); font-weight: 700; margin-top: var(--sp-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.acct-kpi .s { font-size: var(--fs-sm); font-weight: 600; margin-top: 2px; }
+.acct .nw { white-space: nowrap; }   /* 숫자와 '원'이 줄바꿈으로 떨어지지 않게 묶음 */
+
+/* ---------- 2단 ---------- */
+.acct-layout { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: var(--sp-5); align-items: start; }
+.acct-card { background: var(--card); border-radius: var(--radius-lg); box-shadow: var(--shadow); padding: var(--sp-5); min-width: 0; }
+.acct-card-h { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); margin-bottom: var(--sp-3); flex-wrap: wrap; }
+.acct-card-t { font-size: var(--fs-lg); font-weight: 700; }
+.acct-card-t small { color: var(--primary); font-size: var(--fs-lg); margin-left: 2px; }
+.acct-chips { display: flex; gap: var(--sp-1); }
+.acct-chips button { border: none; background: none; height: 32px; padding: 0 var(--sp-3); border-radius: var(--radius-sm); font-family: inherit;
+                     font-size: var(--fs-sm); font-weight: 600; color: var(--text-sub); cursor: pointer; }
+.acct-chips button:hover { background: var(--fill); color: var(--text); }
+.acct-chips button.on { background: var(--text); color: #fff; }
+
+/* 보유 종목 행 */
+.acct-row { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3) var(--sp-2); margin: 0 calc(var(--sp-2) * -1);
+            border-radius: var(--radius-md); text-decoration: none; color: inherit; transition: background .12s; }
+.acct-row:hover { background: #f9fafb; }
+.acct-logo { position: relative; width: 40px; height: 40px; border-radius: 50%; flex: none; overflow: hidden; display: inline-flex;
+             align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: var(--fs-md); }
+.acct-logo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #fff; }
+.acct-name { flex: 1; min-width: 0; }
+.acct-name .nm { font-size: var(--fs-md); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.acct-name .sub { font-size: var(--fs-sm); color: var(--text-sub); margin-top: 2px; }
+.acct-val { text-align: right; flex: none; }
+.acct-val .v { font-size: var(--fs-md); font-weight: 700; border-radius: 6px; padding: 0 2px; }
+.acct-val .pl { font-size: var(--fs-sm); font-weight: 600; margin-top: 2px; }
+.acct-foot { display: flex; justify-content: space-between; font-size: var(--fs-sm); color: var(--text-sub); border-top: 1px solid var(--line);
+             margin-top: var(--sp-2); padding-top: var(--sp-3); }
+.acct-foot b { color: var(--text); }
+
+/* 주문 내역 */
+.acct-day { font-size: var(--fs-sm); font-weight: 700; color: var(--text-sub); margin: var(--sp-4) 0 var(--sp-1); }
+.acct-day:first-child { margin-top: 0; }
+.acct-ord { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3) 0; border-bottom: 1px solid #f2f4f6; text-decoration: none; color: inherit; }
+.acct-ord:last-child { border-bottom: none; }
+.acct-tag { flex: none; width: 40px; height: 26px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;
+            font-size: var(--fs-xs); font-weight: 700; }
+.acct-tag.buy  { background: var(--up-weak);   color: var(--up); }
+.acct-tag.sell { background: var(--down-weak); color: var(--down); }
+.acct-auto { display: inline-block; margin-left: var(--sp-1); padding: 1px 6px; border-radius: 5px; background: #f1eefd; color: #845ef7;
+             font-size: 11px; font-weight: 700; vertical-align: 1px; }
+.acct-ord .nm { font-size: var(--fs-md); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.acct-ord .sub { font-size: var(--fs-sm); color: var(--text-sub); margin-top: 2px; }
+.acct-ord .amt { margin-left: auto; text-align: right; flex: none; font-size: var(--fs-md); font-weight: 700; }
+.acct-more { width: 100%; height: 44px; margin-top: var(--sp-3); border: none; background: var(--fill); border-radius: var(--radius-md);
+             font-family: inherit; font-size: var(--fs-md); font-weight: 600; color: #4e5968; cursor: pointer; }
+.acct-more:hover { background: #e5e8eb; }
+.acct-scroll { max-height: 640px; overflow-y: auto; margin-right: calc(var(--sp-2) * -1); padding-right: var(--sp-2); }
+
+/* 빈 화면 */
+.acct-empty { text-align: center; padding: var(--sp-8) var(--sp-4); }
+.acct-empty .ico { font-size: 32px; }
+.acct-empty .tt { font-size: var(--fs-md); font-weight: 700; margin-top: var(--sp-2); }
+.acct-empty .ds { font-size: var(--fs-sm); color: var(--text-sub); margin-top: var(--sp-1); line-height: 1.5; }
+.acct-empty a { display: inline-flex; align-items: center; height: 40px; padding: 0 var(--sp-4); margin-top: var(--sp-4); border-radius: var(--radius-sm);
+                background: var(--primary-weak); color: var(--primary); font-weight: 700; font-size: var(--fs-sm); text-decoration: none; }
+
+.acct-mtabs { display: none; }
+
+@media (max-width: 900px) {
+    .acct-layout { grid-template-columns: 1fr; }
+    .acct-mtabs { display: flex; background: var(--fill); border-radius: var(--radius-md); padding: 4px; margin-bottom: var(--sp-3); }
+    .acct-mtabs button { flex: 1; height: 40px; border: none; background: none; border-radius: var(--radius-sm); font-family: inherit;
+                         font-size: var(--fs-md); font-weight: 700; color: var(--text-sub); cursor: pointer; }
+    .acct-mtabs button.on { background: #fff; color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .acct[data-mtab="hold"] .acct-orders { display: none; }
+    .acct[data-mtab="orders"] .acct-holds { display: none; }
+    .acct-hero { padding: var(--sp-5); }
+    .acct-card { padding: var(--sp-4); }
+    .acct-scroll { max-height: none; }
+}
+@media (max-width: 560px) {
+    .acct-total { font-size: var(--fs-2xl); }
+    .acct-kpis { grid-template-columns: 1fr 1fr; }
+    .acct-kpi:last-child { grid-column: span 2; }
+}

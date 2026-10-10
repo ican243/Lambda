@@ -421,7 +421,8 @@ function processSell($conn, $userId, $stockCode, $quantity, $price)
 function getMyHoldings($conn, $userId)
 {
     $stmt = mysqli_prepare($conn, "
-        SELECT h.stock_code, sm.stock_name, h.quantity, h.avg_price, sl.price as current_price
+        SELECT h.stock_code, sm.stock_name, h.quantity, h.avg_price, sl.price as current_price,
+               sl.updated_at as price_at
         FROM holdings h
         INNER JOIN stock_master sm ON h.stock_code = sm.stock_code
         LEFT JOIN stock_latest sl ON sl.stock_code = h.stock_code
@@ -460,16 +461,18 @@ function getMyAccount($conn, $userId)
 // -----------------------------
 // 내 주문 내역 조회
 // -----------------------------
-function getMyOrders($conn, $userId)
+function getMyOrders($conn, $userId, $limit = 300)
 {
+    ensureAutoTradeSchema($conn);   // is_auto(자동매매 주문 표시) 컬럼이 없는 DB에서도 안전하게
     $stmt = mysqli_prepare($conn, "
-        SELECT o.stock_code, sm.stock_name, o.order_type, o.quantity, o.price, o.total_amount, o.created_at
+        SELECT o.stock_code, sm.stock_name, o.order_type, o.quantity, o.price, o.total_amount, o.created_at, o.is_auto
         FROM orders o
         INNER JOIN stock_master sm ON o.stock_code = sm.stock_code
         WHERE o.user_id = ?
-        ORDER BY o.created_at DESC
+        ORDER BY o.created_at DESC, o.id DESC
+        LIMIT ?
     ");
-    mysqli_stmt_bind_param($stmt, "i", $userId);
+    mysqli_stmt_bind_param($stmt, "ii", $userId, $limit);
     mysqli_stmt_execute($stmt);
     $result = mysqli_stmt_get_result($stmt);
 
