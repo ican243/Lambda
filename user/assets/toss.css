@@ -836,7 +836,6 @@ body {
 .sd-ord-msg:empty { min-height: 0; margin: var(--sp-1) 0; }
 .sd-ord-submit { width: 100%; }
 .sd-ord-note { font-size: var(--fs-xs); color: var(--text-sub); line-height: 1.5; margin: var(--sp-3) 0 0; text-align: center; }
-.sd-ord-note.warn { color: #b45309; background: #fff7e6; border-radius: var(--radius-sm); padding: var(--sp-2) var(--sp-3); text-align: left; }
 .sd-btn.ghost { background: var(--fill); color: var(--text); }
 
 /* 최종 확인 창 — PC는 화면 가운데, 휴대폰은 아래에서 */
@@ -966,7 +965,6 @@ body {
               display: inline-block; border-radius: 8px; padding: 0 var(--sp-1); margin-left: calc(var(--sp-1) * -1); }
 .acct-total-sub { font-size: var(--fs-md); font-weight: 600; margin-top: var(--sp-1); }
 .acct-total-sub .lbl { color: var(--text-sub); font-weight: 500; margin-right: var(--sp-1); }
-.acct-asof { font-size: var(--fs-xs); color: #b45309; background: #fff7e6; border-radius: 6px; padding: 2px var(--sp-2); font-weight: 600; }
 
 /* 주식 / 현금 비율 막대 */
 .acct-mix { margin-top: var(--sp-5); }
@@ -1076,7 +1074,6 @@ body {
              background: var(--card); border-radius: 999px; padding: 5px var(--sp-3); box-shadow: var(--shadow); }
 .hm-status i { width: 7px; height: 7px; border-radius: 50%; background: #c9d2dc; }
 .hm-status.open i { background: #12b76a; animation: blip 1.6s infinite; }
-.hm-asof { font-size: var(--fs-xs); color: #b45309; background: #fff7e6; border-radius: 6px; padding: 3px var(--sp-2); font-weight: 600; }
 
 /* ---------- 지수 카드 ---------- */
 .hm-indices { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--sp-3); margin-bottom: var(--sp-6); }

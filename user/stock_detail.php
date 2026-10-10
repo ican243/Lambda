@@ -46,12 +46,6 @@ $account = $loggedIn ? getMyAccount($conn, $_SESSION['user_id']) : null;
 $cash    = (int) ($account['cash_balance'] ?? 0);   // 계좌 행이 없는 회원이어도 경고 없이 0원
 $holding = $loggedIn ? getMyHolding($conn, $_SESSION['user_id'], $stockCode) : null;
 
-// 주문은 'DB에 있는 최신가'로 체결된다. 그 가격이 오늘 것이 아니면(실시간 수집 중단 등) 주문 패널에 미리 알려준다.
-$priceAt    = $stock['created_at'] ?? null;                                     // stock_latest.updated_at (KST)
-$todayKst   = (new DateTime('now', new DateTimeZone('Asia/Seoul')))->format('Y-m-d');
-$priceStale = $priceAt && substr($priceAt, 0, 10) !== $todayKst;
-$priceAtTxt = $priceAt ? (int) substr($priceAt, 5, 2) . '월 ' . (int) substr($priceAt, 8, 2) . '일' : '';
-
 // 첫 화면에 바로 보일 가격(DB 최신값). 이후 KIS 시세·실시간이 오면 갱신된다.
 $price  = (int) ($stock['price'] ?? 0);
 $chg    = (int) ($stock['change_price'] ?? 0);
@@ -218,11 +212,7 @@ include 'includes/header.php';
                     <p class="sd-ord-msg" id="ord-msg" role="alert"></p>
                     <button type="button" class="sd-btn buy sd-ord-submit" id="ord-submit" disabled>구매하기</button>
 
-                    <?php if ($priceStale): ?>
-                        <p class="sd-ord-note warn">⚠️ 실시간 시세가 끊겨 있어요. <b><?= $priceAtTxt ?> 가격</b>으로 체결돼요.</p>
-                    <?php else: ?>
-                        <p class="sd-ord-note">지금 가격(시장가)으로 바로 체결돼요. 모의투자라 실제 돈은 오가지 않아요.</p>
-                    <?php endif; ?>
+                    <p class="sd-ord-note">지금 가격(시장가)으로 바로 체결돼요. 모의투자라 실제 돈은 오가지 않아요.</p>
                 <?php else: ?>
                     <p class="hint">로그인하면 1,000만원 모의자금으로 사고팔 수 있어요.</p>
                     <a href="login.php?next=<?= urlencode('stock_detail.php?code=' . $stockCode) ?>" class="sd-btn primary">로그인하고 거래하기</a>

@@ -53,7 +53,7 @@ include 'includes/header.php';
 
     <!-- ===== 총 자산 ===== -->
     <section class="acct-hero">
-        <div class="acct-hero-k">총 자산 <span class="sd-live" id="acct-live"><i></i>실시간</span> <span class="acct-asof" id="acct-asof" hidden></span></div>
+        <div class="acct-hero-k">총 자산 <span class="sd-live" id="acct-live"><i></i>실시간</span></div>
         <div class="acct-total" id="acct-total">—</div>
         <div class="acct-total-sub"><span class="lbl">시작 금액 <?= number_format($initial / 10000) ?>만원보다</span><span id="acct-vs-start">—</span></div>
 
@@ -157,14 +157,6 @@ include 'includes/header.php';
         $('kpi-cost').innerHTML = `투자 원금 <span class="nw">${won(cost)}</span>`;
         $('kpi-pl').textContent = sign(pl) + won(pl); $('kpi-pl').className = 'v ' + cls(Math.round(pl));
         $('kpi-plr').textContent = sign(plr) + plr.toFixed(2) + '%'; $('kpi-plr').className = 's ' + cls(Math.round(pl));
-
-        // 시세가 오늘 것이 아니면(실시간 수집 중단 등) 기준 날짜를 알려준다
-        const today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);   // 한국 날짜
-        const dates = holds.map(h => (h.price_at || '').slice(0, 10)).filter(Boolean).sort();
-        const latest = dates[dates.length - 1];
-        const asof = $('acct-asof');
-        if (latest && latest < today) { asof.textContent = `${+latest.slice(5, 7)}월 ${+latest.slice(8, 10)}일 시세 기준`; asof.hidden = false; }
-        else asof.hidden = true;
     }
 
     // ================= 보유 종목 =================

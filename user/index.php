@@ -33,7 +33,6 @@ include 'includes/header.php';
     <div class="hm-head">
         <h1>오늘의 시장</h1>
         <span class="hm-status" id="hm-status"><i></i><span></span></span>
-        <span class="hm-asof" id="hm-asof" hidden></span>
     </div>
 
     <!-- ===== 지수 카드 ===== -->
@@ -131,7 +130,7 @@ include 'includes/header.php';
         return `<span class="hm-logo" style="background:hsl(${h % 360},62%,62%)"><img src="assets/logos/${esc(code)}.png" alt="" loading="lazy" onload="this.classList.add('ok')" onerror="this.remove()">${esc(String(name || '?').trim().charAt(0))}</span>`;
     }
 
-    // ================= 장 상태 · 시세 기준 =================
+    // ================= 장 상태 =================
     function renderStatus() {
         const t = kstNow(), day = t.getUTCDay(), m = t.getUTCHours() * 60 + t.getUTCMinutes();
         let txt, open = false;
@@ -142,18 +141,10 @@ include 'includes/header.php';
         $('hm-status').className = 'hm-status' + (open ? ' open' : '');
         $('hm-status').querySelector('span').textContent = txt;
 
-        // 시세가 오늘 것이 아니면(실시간 수집 중단 등) 기준 시각을 알려준다
+        // 'HH:MM 기준'은 시세가 오늘 것일 때만 보여준다 (오래된 시세에 지금 시각을 붙이면 거짓말이 되므로)
         const latest = stocks.map(s => s.updated_at || '').sort().pop();
-        const today = t.toISOString().slice(0, 10);
-        const asof = $('hm-asof');
-        if (latest && latest.slice(0, 10) < today) {
-            asof.textContent = `${+latest.slice(5, 7)}월 ${+latest.slice(8, 10)}일 ${latest.slice(11, 16)} 시세 기준`;
-            asof.hidden = false;
-            $('hm-time').textContent = '';
-        } else {
-            asof.hidden = true;
-            $('hm-time').textContent = `${String(t.getUTCHours()).padStart(2, '0')}:${String(t.getUTCMinutes()).padStart(2, '0')} 기준`;
-        }
+        const fresh = latest && latest.slice(0, 10) >= t.toISOString().slice(0, 10);
+        $('hm-time').textContent = fresh ? `${String(t.getUTCHours()).padStart(2, '0')}:${String(t.getUTCMinutes()).padStart(2, '0')} 기준` : '';
     }
 
     // ================= 지수 카드 (작은 선 차트 포함) =================
