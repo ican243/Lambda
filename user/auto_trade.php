@@ -2,10 +2,10 @@
 // user/auto_trade.php - 자동매매 (로그인 필수)
 //
 // 이번 단계는 "화면만". 실제 매매 로직은 다음 단계.
-// 화면 구성 (형 손그림 last2.png 기준):
-//   좌 : 보유주식 도넛차트 (상위 5개만, '기타'로 안 묶음, 조각 크기 = 평가금액)
-//   우 : 상위 5종목 리스트 (내림차순) + 우상단 일시정지 버튼
-//   하 : 거래내역 표 6컬럼 (종목명·종목코드·시간·가격·매수/매도·수익률), 최신 15건 FIFO
+// 화면 구성 (형 손그림 last2.png 기준 → 토스형으로 다듬음):
+//   위   : 가동 스위치(일시정지/재개) + 요약 카드(투자 중 금액 · 평가 손익 · 주문 가능 현금)
+//   가운데: 보유주식 도넛차트 (상위 5개만, '기타'로 안 묶음, 조각 크기 = 평가금액) + 상위 5종목 목록
+//   아래 : 거래내역 6가지 정보 (종목명·종목코드·시간·가격·매수/매도·수익률), 최신 15건 FIFO
 require_once 'func.php';
 /** @var mysqli $conn */   // config/db.php 에서 넘어옴 (에디터 자동완성·오탐 방지용)
 startUserSession();
@@ -24,519 +24,335 @@ $initial = [
     'cash'      => (int) ($account['cash_balance'] ?? 0),
 ];
 
-$pageClass = 'app-xwide';
+$pageWide = true;
 include 'includes/header.php';
 ?>
 
-<div style="margin: 12px 0 8px;">
-    <a href="index.php" class="muted" style="text-decoration:none;font-size:15px;font-weight:600;">← 홈으로</a>
-</div>
-
-<div class="at-head">
-    <div>
-        <h2 style="font-size:24px;font-weight:700;margin:0;">자동매매</h2>
-        <p class="muted" style="font-size:15px;margin:8px 0 0;">
-            조건을 정해두면 알아서 사고팝니다 ·
-            주문 가능 현금 <b style="color:var(--text);" id="at-cash"><?= number_format($initial['cash']) ?>원</b>
-        </p>
-    </div>
-    <div class="at-status" id="at-status"><!-- JS: 가동중 / 일시정지 배지 --></div>
-</div>
-
-<!-- 아직 매매 로직이 없다는 안내 (로직 붙으면 이 줄만 지우면 됨) -->
-<div class="at-notice">
-    🤖 지금은 <b>화면</b>만 준비된 단계예요. 아래 차트·리스트·거래내역은 <b>실제 내 보유·거래 데이터</b>로 그려집니다.
-    자동매매 조건 설정은 다음 단계에 붙습니다.
-</div>
-
-<div class="at-top">
-    <!-- ① 도넛차트: 보유 상위 5종목 -->
-    <div class="widget">
-        <div class="widget-h">
-            <span class="wt">보유주식 <span class="muted" style="font-weight:500;font-size:13px;">· 상위 5종목</span></span>
+<div class="au">
+    <div class="au-head">
+        <div>
+            <h1>자동매매</h1>
+            <p>조건을 정해 두면 알아서 사고팔아요.</p>
         </div>
-        <div class="at-donut-body">
-            <div class="at-donut-wrap">
-                <canvas id="at-donut" aria-label="보유종목 비중 도넛차트" role="img"></canvas>
-                <!-- 도넛 가운데 총 평가금액 -->
-                <div class="at-donut-center" id="at-donut-center"></div>
+        <button type="button" class="au-switch" id="au-switch" role="switch" aria-checked="false">
+            <span class="lbl"><i></i><span id="au-switch-txt">가동 중</span></span>
+            <span class="track"></span>
+        </button>
+    </div>
+
+    <!-- 아직 매매 로직이 없다는 안내 (로직 붙으면 이 블록만 지우면 됨) -->
+    <div class="au-notice">
+        <span>🤖</span>
+        <span>자동매매 <b>조건 설정은 준비 중</b>이에요. 지금은 아래 차트·목록·거래 내역을 <b>실제 내 보유·거래 데이터</b>로 보여드려요.</span>
+    </div>
+
+    <!-- 요약 -->
+    <div class="au-kpis">
+        <div class="au-kpi"><div class="k">투자 중인 금액</div><div class="v" id="kpi-eval">—</div><div class="s flat" id="kpi-count">—</div></div>
+        <div class="au-kpi"><div class="k">평가 손익</div><div class="v" id="kpi-pl">—</div><div class="s" id="kpi-plr">—</div></div>
+        <div class="au-kpi"><div class="k">주문 가능 현금</div><div class="v" id="kpi-cash">—</div></div>
+    </div>
+
+    <!-- 보유 비중: 도넛 + 상위 5종목 -->
+    <section class="au-card">
+        <div class="au-card-h">
+            <span class="au-card-t">보유 비중 <small>평가금액 상위 5종목</small></span>
+            <span class="sd-live" id="au-live"><i></i>실시간</span>
+        </div>
+        <div id="au-mix-box">
+            <div class="au-mix">
+                <div>
+                    <div class="au-donut">
+                        <canvas id="au-donut" aria-label="보유종목 비중 도넛차트" role="img"></canvas>
+                        <div class="au-donut-c" id="au-donut-c"></div>
+                    </div>
+                    <div class="au-mix-note" id="au-mix-note" style="text-align:center;"></div>
+                </div>
+                <div id="au-list"></div>
             </div>
-            <div class="at-donut-note muted" id="at-donut-note"></div>
         </div>
-    </div>
-
-    <!-- ② 상위 5종목 리스트 + 일시정지 -->
-    <div class="widget">
-        <div class="widget-h">
-            <span class="wt">거래중 종목</span>
-            <span class="wh-right">
-                <button type="button" class="at-pause" id="at-pause">일시정지</button>
-            </span>
+        <div id="au-mix-empty" hidden>
+            <div class="au-empty"><div class="ico">🌱</div><div class="tt">아직 보유한 종목이 없어요</div>
+                <div class="ds">종목을 사면 비중과 수익률이 여기에 그려져요.</div><a href="index.php#ranking">주식 골라보기</a></div>
         </div>
-        <div class="at-list" id="at-list"></div>
-    </div>
-</div>
+    </section>
 
-<!-- ③ 거래내역 (최신 15건) -->
-<div class="widget" style="margin-top:20px;">
-    <div class="widget-h">
-        <span class="wt">거래내역 <span class="muted" style="font-weight:500;font-size:13px;">· 최신 15건</span></span>
-        <span class="wh-right">
-            <span class="live" id="at-live"><span class="blip"></span>실시간</span>
-        </span>
-    </div>
-    <div class="at-table-wrap">
-        <table class="at-table">
+    <!-- 거래 내역 (최신 15건) -->
+    <section class="au-card">
+        <div class="au-card-h">
+            <span class="au-card-t">거래 내역 <small>최신 15건</small></span>
+        </div>
+        <table class="au-table">
             <thead>
-                <tr>
-                    <th>종목명</th>
-                    <th>종목코드</th>
-                    <th>시간</th>
-                    <th class="num">가격</th>
-                    <th class="ctr">구분</th>
-                    <th class="num">수익률</th>
-                </tr>
+                <tr><th>종목명</th><th>종목코드</th><th>시간</th><th class="num">가격</th><th class="ctr">구분</th><th class="num">수익률</th></tr>
             </thead>
-            <tbody id="at-tbody"></tbody>
+            <tbody id="au-tbody"></tbody>
         </table>
-    </div>
-    <div class="at-table-foot muted">
-        매도 행은 <b>실현수익률</b>(매도가 − 그 시점 평단), 매수 행은 <b>매수가 대비 현재가</b> 등락률입니다.
-    </div>
+        <div class="au-foot">
+            <b>판매</b> 줄의 수익률은 <b>실제로 번 비율</b>(판매가 − 그때 평균 단가), <b>구매</b> 줄은 <b>산 가격 대비 지금 가격</b> 등락률이에요.
+        </div>
+    </section>
+    <div class="sd-conn" id="au-toast" hidden></div>
 </div>
 
 <script src="assets/chart.umd.min.js"></script>
 <script>
-// =====================================================================
-// 자동매매 화면
-//   · 초기 데이터는 서버에서 인라인으로 받음(INITIAL)
-//   · 이후 5초마다 get_auto_trades.php 폴링 → 거래내역/도넛 갱신
-//   · 새 거래 행은 맨 위에 삽입 + 플래시, 15개 초과분은 맨 아래에서 제거(FIFO)
-// =====================================================================
-const INITIAL = <?= json_encode($initial, JSON_UNESCAPED_UNICODE) ?>;
-const CSRF    = <?= json_encode(csrfToken()) ?>;   // AJAX POST에 함께 보낼 CSRF 토큰
-const MAX_ROWS = 15;
+(function () {
+    'use strict';
+    // =====================================================================
+    // 자동매매 화면
+    //   · 초기 데이터는 서버에서 인라인으로 받음(INITIAL)
+    //   · 이후 5초마다 get_auto_trades.php 폴링 → 요약/도넛/목록/거래내역 갱신
+    //   · 새 거래 행은 맨 위에 삽입 + 반짝, 15개 초과분은 맨 아래에서 제거(FIFO)
+    //   · 실시간 시세: 실시간 서버가 상시 보내는 홈 종목 가격 중 내 보유 종목이면 즉시 반영
+    // =====================================================================
+    const INITIAL  = <?= json_encode($initial, JSON_UNESCAPED_UNICODE) ?>;
+    const CSRF     = <?= json_encode(csrfToken()) ?>;   // AJAX POST에 함께 보낼 CSRF 토큰
+    const MAX_ROWS = 15;
+    // 도넛 조각 색 (토스 블루 계열 + 포인트) — 5개면 충분
+    const SLICE_COLORS = ['#3182f6', '#4dabf7', '#845ef7', '#ff922b', '#20c997'];
 
-// ---------- 공통 헬퍼 (홈 index.php와 같은 규칙) ----------
-const won = n => Number(n).toLocaleString() + '원';
-const logoText = name => (name || '?').trim().charAt(0);
-function cls(v) { return v > 0 ? 'up' : (v < 0 ? 'down' : 'muted'); }
-function rateText(v) {
-    if (v === null || v === undefined) return '-';
-    const n = Number(v);
-    return (n > 0 ? '+' : '') + n.toFixed(2) + '%';
-}
-// 종목코드 해시 → 종목별 고유 파스텔 컬러 (실제 로고 없을 때의 시각 포인트)
-function logoColor(code) {
-    const s = String(code || '');
-    let h = 0;
-    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-    const hue = h % 360;
-    return { bg: `hsl(${hue} 70% 93%)`, fg: `hsl(${hue} 45% 40%)` };
-}
-function logoHTML(code, name) {
-    const { bg, fg } = logoColor(code);
-    return `<div class="stock-logo" style="background:${bg};color:${fg}">
-        <img src="assets/logos/${code}.png" alt="" loading="lazy" onerror="this.remove()">
-        <span>${logoText(name)}</span>
-    </div>`;
-}
-// 조 / 억 단위로 축약 (총 평가금액 표기용)
-function shortWon(n) {
-    n = Number(n) || 0;
-    if (n >= 1e12) return (n / 1e12).toFixed(2) + '조';
-    if (n >= 1e8)  return Math.round(n / 1e8).toLocaleString() + '억';
-    if (n >= 1e4)  return Math.round(n / 1e4).toLocaleString() + '만';
-    return n.toLocaleString();
-}
-// '2026-07-30 14:23:05' → '14:23:05'
-function timeOnly(dt) {
-    const s = String(dt || '');
-    return s.length >= 19 ? s.slice(11, 19) : s;
-}
-const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-
-// 도넛 조각 색 (토스 블루 계열 + 포인트) — 5개면 충분
-const SLICE_COLORS = ['#3182f6', '#4dabf7', '#845ef7', '#ff922b', '#20c997'];
-
-// ---------- ① 도넛차트 ----------
-let donut = null;
-
-function renderDonut(p) {
-    const items = p.items || [];
-    const center = document.getElementById('at-donut-center');
-    const note = document.getElementById('at-donut-note');
-    const canvas = document.getElementById('at-donut');
-
-    if (!items.length) {
-        if (donut) { donut.destroy(); donut = null; }
-        canvas.style.display = 'none';
-        center.innerHTML = '';
-        note.innerHTML = `보유한 종목이 없어요.<br><a href="index.php#ranking" style="color:var(--primary);font-weight:600;">주식 골라보기 →</a>`;
-        return;
+    const $ = id => document.getElementById(id);
+    const num  = n => Math.round(Number(n) || 0).toLocaleString('ko-KR');
+    const won  = n => num(n) + '원';
+    const sign = n => (n > 0 ? '+' : '');
+    const cls  = n => (n > 0 ? 'up' : (n < 0 ? 'down' : 'flat'));
+    const esc  = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const rateText = v => (v === null || v === undefined) ? '—' : `${sign(Number(v))}${Number(v).toFixed(2)}%`;
+    function shortWon(n) {                         // 조 / 억 / 만 단위로 축약 (도넛 가운데 표기용)
+        n = Number(n) || 0;
+        if (n >= 1e12) return (n / 1e12).toFixed(2) + '조';
+        if (n >= 1e8)  return Math.round(n / 1e8).toLocaleString() + '억';
+        if (n >= 1e4)  return Math.round(n / 1e4).toLocaleString() + '만';
+        return n.toLocaleString();
     }
-    canvas.style.display = '';
+    // '2026-10-10 14:23:05' → 오늘이면 '14:23:05', 아니면 '10/09 14:23'
+    function timeText(dt) {
+        const s = String(dt || '');
+        if (s.length < 19) return s;
+        const today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
+        return s.slice(0, 10) === today ? s.slice(11, 19) : `${+s.slice(5, 7)}/${s.slice(8, 10)} ${s.slice(11, 16)}`;
+    }
+    function logo(code, name) {
+        let h = 0; for (const ch of String(code)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+        return `<span class="au-logo" style="background:hsl(${h % 360},62%,62%)"><img src="assets/logos/${esc(code)}.png" alt="" loading="lazy" onload="this.classList.add('ok')" onerror="this.remove()">${esc(String(name || '?').trim().charAt(0))}</span>`;
+    }
+    let toastT = null;
+    function toast(msg) {
+        const el = $('au-toast'); el.textContent = msg; el.hidden = false;
+        clearTimeout(toastT); toastT = setTimeout(() => { el.hidden = true; }, 2200);
+    }
 
-    center.innerHTML = `<div class="at-dc-label">총 평가금액</div>
-        <div class="at-dc-value">${shortWon(p.total_eval)}원</div>`;
+    // ================= 요약 카드 =================
+    let cash = INITIAL.cash;
+    function renderKpis(p) {
+        $('kpi-eval').textContent = won(p.total_eval);
+        $('kpi-count').textContent = p.total_count ? `보유 ${p.total_count}종목` : '보유 종목 없음';
+        const pl = (p.total_eval || 0) - (p.total_cost || 0), plr = p.total_cost ? pl / p.total_cost * 100 : 0;
+        $('kpi-pl').textContent = sign(pl) + won(pl); $('kpi-pl').className = 'v ' + cls(Math.round(pl));
+        $('kpi-plr').textContent = rateText(plr); $('kpi-plr').className = 's ' + cls(Math.round(pl));
+        $('kpi-cash').textContent = won(cash);
+    }
 
-    // 상위 5개 합이 전체의 100%가 아니면(=6위 이하 존재) 솔직하게 알려준다
-    note.innerHTML = (p.total_count > items.length)
-        ? `보유 ${p.total_count}종목 중 상위 ${items.length}개 · 전체 평가금액의 <b>${p.shown_ratio}%</b>`
-        : `보유 ${p.total_count}종목 전체`;
+    // ================= 도넛 =================
+    let donut = null;
+    function renderDonut(p) {
+        const items = p.items || [];
+        $('au-mix-box').hidden = !items.length;
+        $('au-mix-empty').hidden = !!items.length;
+        if (!items.length) { if (donut) { donut.destroy(); donut = null; } return; }
 
-    const labels = items.map(i => i.stock_name);
-    const data = items.map(i => i.eval_amount);
+        $('au-donut-c').innerHTML = `<div class="k">총 평가금액</div><div class="v">${shortWon(p.total_eval)}원</div>`;
+        // 상위 5개 합이 전체의 100%가 아니면(=6위 이하 존재) 솔직하게 알려준다
+        $('au-mix-note').innerHTML = p.total_count > items.length
+            ? `보유 ${p.total_count}종목 중 상위 ${items.length}개 · 전체의 <b>${p.shown_ratio}%</b>`
+            : `보유 ${p.total_count}종목 전체`;
+        if (!window.Chart) return;
 
-    // 데이터만 바뀐 경우엔 차트를 다시 만들지 않고 갱신(폴링마다 애니메이션 튀는 것 방지)
-    if (donut && donut.data.labels.join('|') === labels.join('|')) {
-        donut.data.datasets[0].data = data;
+        const labels = items.map(i => i.stock_name), data = items.map(i => i.eval_amount);
+        // 데이터만 바뀐 경우엔 차트를 다시 만들지 않고 갱신(폴링마다 애니메이션 튀는 것 방지)
+        if (donut && donut.data.labels.join('|') === labels.join('|')) {
+            donut.data.datasets[0].data = data; donut._items = items; donut.update('none');
+            return;
+        }
+        if (donut) donut.destroy();
+        donut = new Chart($('au-donut'), {
+            type: 'doughnut',
+            data: { labels, datasets: [{ data, backgroundColor: SLICE_COLORS.slice(0, items.length), borderColor: '#fff', borderWidth: 3, hoverOffset: 12, hoverBorderColor: '#fff' }] },
+            options: {
+                cutout: '64%', responsive: true, maintainAspectRatio: false,
+                animation: { animateRotate: true, animateScale: true, duration: 800 },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: 'rgba(25,31,40,.92)', padding: 12, displayColors: false,
+                        titleFont: { family: 'Pretendard', size: 13, weight: '700' }, bodyFont: { family: 'Pretendard', size: 13 },
+                        callbacks: { label: ctx => { const it = (donut._items || [])[ctx.dataIndex]; return it ? [`평가금액 ${won(it.eval_amount)}`, `비중 ${it.weight}%`, `수익률 ${rateText(it.profit_rate)}`] : ''; } },
+                    },
+                },
+                // 조각 클릭 → 종목 상세
+                onClick: (evt, els) => { const it = els.length && (donut._items || [])[els[0].index]; if (it) location.href = 'stock_detail.php?code=' + encodeURIComponent(it.stock_code); },
+                onHover: (evt, els) => { evt.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
+            },
+        });
         donut._items = items;
-        donut.update('none');       // 실시간 갱신은 애니메이션 없이 (0.4초마다 오므로 튀는 것 방지)
-        return;
     }
-    if (donut) donut.destroy();
 
-    donut = new Chart(document.getElementById('at-donut'), {
-        type: 'doughnut',
-        data: {
-            labels,
-            datasets: [{
-                data,
-                backgroundColor: SLICE_COLORS.slice(0, items.length),
-                borderColor: '#fff',
-                borderWidth: 3,
-                hoverOffset: 14,        // hover 시 조각이 튀어나옴 (형 요청)
-                hoverBorderColor: '#fff'
-            }]
-        },
-        options: {
-            cutout: '58%',
-            responsive: true,
-            maintainAspectRatio: false,
-            animation: { animateRotate: true, animateScale: true, duration: 900 },
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    backgroundColor: 'rgba(25,31,40,.92)',
-                    padding: 12,
-                    displayColors: false,
-                    titleFont: { family: 'Pretendard', size: 13, weight: '700' },
-                    bodyFont: { family: 'Pretendard', size: 13 },
-                    callbacks: {
-                        label: (ctx) => {
-                            const it = (donut._items || [])[ctx.dataIndex];
-                            if (!it) return '';
-                            return [`평가금액 ${won(Math.round(it.eval_amount))}`,
-                                    `비중 ${it.weight}%`,
-                                    `수익률 ${rateText(it.profit_rate)}`];
-                        }
-                    }
-                }
-            },
-            // 조각 클릭 → 기존 종목상세로 라우팅
-            onClick: (evt, els) => {
-                if (!els.length) return;
-                const it = (donut._items || [])[els[0].index];
-                if (it) location.href = 'stock_detail.php?code=' + encodeURIComponent(it.stock_code);
-            },
-            onHover: (evt, els) => { evt.native.target.style.cursor = els.length ? 'pointer' : 'default'; }
+    // ================= 상위 5종목 목록 =================
+    function renderList(p) {
+        $('au-list').innerHTML = (p.items || []).map((it, i) =>
+            `<div class="au-item" data-code="${esc(it.stock_code)}">`
+            + `<span class="au-dot" style="background:${SLICE_COLORS[i % SLICE_COLORS.length]}"></span>`
+            + `<a class="au-item-main" href="stock_detail.php?code=${esc(it.stock_code)}">${logo(it.stock_code, it.stock_name)}`
+            + `<span style="min-width:0;flex:1"><div class="nm">${esc(it.stock_name)}</div><div class="sub">비중 ${it.weight}% · ${num(it.quantity)}주</div></span>`
+            + `<span class="val"><div class="v">${won(it.eval_amount)}</div><div class="r ${cls(it.profit_rate)}">${rateText(it.profit_rate)}</div></span></a>`
+            + `<a class="au-trade" href="stock_detail.php?code=${esc(it.stock_code)}#order">일반매매</a></div>`
+        ).join('');
+    }
+
+    // ================= 거래 내역 (최신 15건 FIFO) =================
+    const seenIds = new Set();
+    function rowHTML(t) {
+        const buy = t.order_type === 'buy';
+        return `<td class="c-name"><a href="stock_detail.php?code=${esc(t.stock_code)}">${esc(t.stock_name)}</a>${Number(t.is_auto) === 1 ? '<span class="au-auto" title="자동매매가 낸 주문">자동</span>' : ''}</td>`
+            + `<td class="c-code muted">${esc(t.stock_code)}</td>`
+            + `<td class="c-time muted">${timeText(t.created_at)}</td>`
+            + `<td class="c-price num">${won(t.price)}</td>`
+            + `<td class="c-type ctr"><span class="au-tag ${buy ? 'buy' : 'sell'}">${buy ? '구매' : '판매'}</span></td>`
+            + `<td class="c-rate num rate ${cls(t.rate)}">${rateText(t.rate)}</td>`;
+    }
+    function renderTrades(trades) {
+        const tb = $('au-tbody');
+        seenIds.clear();
+        if (!trades.length) {
+            tb.innerHTML = `<tr class="au-empty-row"><td colspan="6"><div class="au-empty"><div class="ico">🧾</div><div class="tt">아직 거래 내역이 없어요</div><div class="ds">자동매매나 직접 주문이 체결되면 여기에 쌓여요.</div></div></td></tr>`;
+            return;
         }
-    });
-    donut._items = items;
-}
-
-// ---------- ② 상위 5종목 리스트 ----------
-function renderList(p) {
-    const box = document.getElementById('at-list');
-    const items = p.items || [];
-    if (!items.length) {
-        box.innerHTML = `<div class="at-empty muted">거래중인 종목이 없어요.</div>`;
-        return;
+        tb.innerHTML = trades.map(t => { seenIds.add(t.id); return `<tr data-id="${t.id}">${rowHTML(t)}</tr>`; }).join('');
     }
-    box.innerHTML = items.map((it, i) => {
-        const c = cls(it.profit_rate);
-        return `
-        <div class="at-row" data-code="${it.stock_code}">
-            <div class="at-slice-dot" style="background:${SLICE_COLORS[i % SLICE_COLORS.length]}"></div>
-            <a class="at-row-main" href="stock_detail.php?code=${it.stock_code}">
-                ${logoHTML(it.stock_code, it.stock_name)}
-                <div class="at-row-name">
-                    <div class="nm">${esc(it.stock_name)}</div>
-                    <div class="cd">비중 ${it.weight}% · ${it.quantity.toLocaleString()}주</div>
-                </div>
-                <div class="at-row-price">
-                    <div class="pr">${won(Math.round(it.price))}</div>
-                    <div class="rt ${c}">${rateText(it.profit_rate)}</div>
-                </div>
-            </a>
-            <a class="at-trade-btn" href="stock_detail.php?code=${it.stock_code}#order">일반매매</a>
-        </div>`;
-    }).join('');
-}
-
-// ---------- ③ 거래내역 표 (최신 15건 FIFO) ----------
-const seenIds = new Set();
-
-function tradeRowHTML(t) {
-    const isBuy = t.order_type === 'buy';
-    const c = cls(t.rate);
-    const badge = isBuy ? `<span class="at-tag buy">매수</span>` : `<span class="at-tag sell">매도</span>`;
-    const auto = Number(t.is_auto) === 1 ? `<span class="at-auto-tag" title="자동매매가 낸 주문">자동</span>` : '';
-    return `
-        <td class="at-td-name">
-            <a href="stock_detail.php?code=${t.stock_code}">${esc(t.stock_name)}</a>${auto}
-        </td>
-        <td class="muted">${esc(t.stock_code)}</td>
-        <td class="muted">${timeOnly(t.created_at)}</td>
-        <td class="num">${won(Math.round(t.price))}</td>
-        <td class="ctr">${badge}</td>
-        <td class="num rate ${c}">${rateText(t.rate)}</td>`;
-}
-
-// 전체 새로 그리기 (첫 로드)
-function renderTrades(trades) {
-    const tbody = document.getElementById('at-tbody');
-    seenIds.clear();
-    if (!trades.length) {
-        tbody.innerHTML = `<tr class="at-empty-row"><td colspan="6" class="muted">아직 거래내역이 없어요.</td></tr>`;
-        return;
-    }
-    tbody.innerHTML = trades.map(t => {
-        seenIds.add(t.id);
-        return `<tr data-id="${t.id}">${tradeRowHTML(t)}</tr>`;
-    }).join('');
-}
-
-// 폴링 결과 반영: 새 거래만 맨 위에 삽입 + 플래시, 15개 넘으면 맨 아래 제거
-function mergeTrades(trades) {
-    const tbody = document.getElementById('at-tbody');
-    if (!seenIds.size) { renderTrades(trades); return; }
-
-    // 오래된 것 → 새것 순으로 넣어야 최신이 결국 맨 위에 온다
-    const fresh = trades.filter(t => !seenIds.has(t.id)).reverse();
-
-    if (fresh.length) {
-        const empty = tbody.querySelector('.at-empty-row');
-        if (empty) empty.remove();
-
+    // 폴링 결과 반영: 새 거래만 맨 위에 삽입 + 반짝, 15개 넘으면 맨 아래 제거
+    function mergeTrades(trades) {
+        const tb = $('au-tbody');
+        if (!seenIds.size) { renderTrades(trades); return; }
+        const fresh = trades.filter(t => !seenIds.has(t.id)).reverse();   // 오래된 것부터 넣어야 최신이 맨 위
         fresh.forEach(t => {
+            tb.querySelector('.au-empty-row')?.remove();
             const tr = document.createElement('tr');
-            tr.dataset.id = t.id;
-            tr.innerHTML = tradeRowHTML(t);
-            tbody.insertBefore(tr, tbody.firstChild);
+            tr.dataset.id = t.id; tr.className = 'is-new'; tr.innerHTML = rowHTML(t);
+            tb.insertBefore(tr, tb.firstChild);
             seenIds.add(t.id);
-            // 수익률 셀에 플래시 (홈 시세 갱신과 같은 효과)
-            const cell = tr.querySelector('.rate');
-            if (cell) cell.classList.add(Number(t.rate) >= 0 ? 'flash-up' : 'flash-down');
         });
-
-        while (tbody.rows.length > MAX_ROWS) {
-            const last = tbody.rows[tbody.rows.length - 1];
-            seenIds.delete(Number(last.dataset.id));
-            last.remove();
-        }
+        while (tb.rows.length > MAX_ROWS) { const last = tb.rows[tb.rows.length - 1]; seenIds.delete(Number(last.dataset.id)); last.remove(); }
+        // 기존 행의 수익률은 현재가에 따라 계속 움직인다(구매 행) → 값이 바뀐 것만 갱신
+        trades.forEach(t => {
+            const cell = tb.querySelector(`tr[data-id="${t.id}"] .rate`);
+            if (cell && cell.textContent !== rateText(t.rate)) { cell.textContent = rateText(t.rate); cell.className = 'c-rate num rate ' + cls(t.rate); }
+        });
     }
 
-    // 기존 행의 수익률은 현재가에 따라 계속 움직인다(매수 행) → 값이 바뀐 것만 갱신
-    trades.forEach(t => {
-        const tr = tbody.querySelector(`tr[data-id="${t.id}"]`);
-        if (!tr) return;
-        const cell = tr.querySelector('.rate');
-        if (!cell) return;
-        const next = rateText(t.rate);
-        if (cell.textContent !== next) {
-            cell.textContent = next;
-            cell.className = 'num rate ' + cls(t.rate);
-        }
-    });
-}
-
-// ---------- 일시정지 버튼 ----------
-let paused = !!INITIAL.paused;
-
-function renderPause() {
-    const btn = document.getElementById('at-pause');
-    const status = document.getElementById('at-status');
-    btn.textContent = paused ? '재개하기' : '일시정지';
-    btn.classList.toggle('resumed', paused);
-    status.innerHTML = paused
-        ? `<span class="at-badge off">⏸ 일시정지</span>`
-        : `<span class="at-badge on">▶ 가동중</span>`;
-}
-
-document.getElementById('at-pause').addEventListener('click', async (e) => {
-    const btn = e.currentTarget;
-    btn.disabled = true;
-    try {
-        const res = await fetch('auto_trade_toggle.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': CSRF },
-            body: 'csrf_token=' + encodeURIComponent(CSRF) + '&paused=' + (paused ? '0' : '1')
-        });
-        const j = await res.json();
-        if (j.error === 'login') { location.href = 'login.php?next=auto_trade.php'; return; }
-        if (j.ok) { paused = !!j.paused; renderPause(); }
-    } catch (err) {
-        // 네트워크 실패 시엔 상태를 바꾸지 않는다(화면과 DB가 어긋나는 것 방지)
-    } finally {
-        btn.disabled = false;
+    // ================= 가동 스위치 (일시정지 / 재개) =================
+    let paused = !!INITIAL.paused;
+    function renderSwitch() {
+        const sw = $('au-switch');
+        sw.classList.toggle('on', !paused);
+        sw.setAttribute('aria-checked', String(!paused));
+        $('au-switch-txt').textContent = paused ? '일시정지됨' : '가동 중';
+        sw.title = paused ? '누르면 자동매매를 다시 켜요' : '누르면 자동매매를 잠시 멈춰요';
     }
-});
-
-// =====================================================================
-// 실시간 (내 계좌와 같은 방식: stock-ws 웹소켓)
-//   · 보유 상위5 종목의 체결이 올 때마다 현재가 → 평가금액 → 비중 → 수익률을 다시 계산
-//   · 도넛 조각 크기도 같이 움직인다
-//   · 거래내역의 '매수' 행 수익률(=매수가 대비 현재가)도 실시간으로 갱신
-//   · DB 폴링(5초)은 새 거래·보유 변화용, 시세는 웹소켓이 담당
-// =====================================================================
-let PF = INITIAL.portfolio;          // 화면에 그려진 포트폴리오 (실시간으로 값이 갱신됨)
-let TRADES = INITIAL.trades;
-let hiddenEval = 0;                  // 상위5에 안 들어간 종목들의 평가금액 (비중 분모에 필요)
-const livePrice = new Map();         // 종목코드 → 실시간 현재가
-
-// 서버에서 포트폴리오를 새로 받을 때마다 기준값을 다시 잡는다
-function adoptPortfolio(p) {
-    PF = p;
-    hiddenEval = Math.max(0, (p.total_eval || 0) - (p.shown_eval || 0));
-    // 이미 받아둔 실시간가가 있으면 즉시 반영 (폴링 결과가 시세를 되돌리지 않게)
-    applyLive();
-}
-
-// 실시간가를 반영해 파생값(평가금액·비중·수익률·총평가) 재계산
-function applyLive() {
-    let shown = 0;
-    PF.items.forEach(it => {
-        const lp = livePrice.get(it.stock_code);
-        if (lp > 0) it.price = lp;
-        it.eval_amount = it.price * it.quantity;
-        it.profit_amount = (it.price - it.avg_price) * it.quantity;
-        it.profit_rate = it.avg_price > 0
-            ? Math.round((it.price - it.avg_price) / it.avg_price * 10000) / 100
-            : 0;
-        shown += it.eval_amount;
+    $('au-switch').addEventListener('click', async e => {
+        const sw = e.currentTarget;
+        sw.disabled = true;
+        try {
+            const res = await fetch('auto_trade_toggle.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': CSRF },
+                body: 'csrf_token=' + encodeURIComponent(CSRF) + '&paused=' + (paused ? '0' : '1'),
+            });
+            const j = await res.json();
+            if (j.error === 'login') { location.href = 'login.php?next=auto_trade.php'; return; }
+            if (j.error === 'csrf') { toast('보안 토큰이 만료됐어요. 새로고침 후 다시 해 주세요.'); return; }
+            if (j.ok) { paused = !!j.paused; renderSwitch(); toast(paused ? '자동매매를 잠시 멈췄어요' : '자동매매를 다시 켰어요'); }
+            else toast('바꾸지 못했어요. 잠시 후 다시 해 주세요.');
+        } catch (err) {
+            toast('바꾸지 못했어요. 잠시 후 다시 해 주세요.');   // 실패하면 상태를 바꾸지 않는다(화면과 DB가 어긋나지 않게)
+        } finally { sw.disabled = false; }
     });
-    // 비중 분모 = 상위5 실시간 평가금액 + 상위5 밖 종목(시세 미구독이라 서버값 고정)
-    const total = shown + hiddenEval;
-    PF.items.forEach(it => {
-        it.weight = total > 0 ? Math.round(it.eval_amount / total * 1000) / 10 : 0;
-    });
-    PF.shown_eval = shown;
-    PF.total_eval = total;
-    PF.shown_ratio = total > 0 ? Math.round(shown / total * 1000) / 10 : 0;
-}
 
-// 실시간은 초당 수십 건씩 오므로 렌더는 묶어서 처리 (도넛 재계산이 매 틱마다 돌면 낭비)
-let renderQueued = false;
-function scheduleRender() {
-    if (renderQueued) return;
-    renderQueued = true;
-    setTimeout(() => {
-        renderQueued = false;
+    // ================= 실시간 시세 반영 =================
+    let PF = INITIAL.portfolio, TRADES = INITIAL.trades, hiddenEval = 0;
+    const livePrice = new Map();                 // 종목코드 → 실시간 현재가
+    function adoptPortfolio(p) {                 // 서버에서 새로 받을 때마다 기준값 재설정 + 받아둔 실시간가 반영
+        PF = p;
+        hiddenEval = Math.max(0, (p.total_eval || 0) - (p.shown_eval || 0));
         applyLive();
-        renderDonut(PF);
-        renderList(PF);
-        updateBuyRates();
-        blip();
-    }, 400);
-}
-
-// 거래내역의 '매수' 행 수익률 = 매수가 대비 현재가 → 실시간가로 갱신
-function updateBuyRates() {
-    const tbody = document.getElementById('at-tbody');
-    TRADES.forEach(t => {
-        if (t.order_type !== 'buy') return;                 // 매도는 실현수익률이라 고정
-        const lp = livePrice.get(t.stock_code);
-        if (!(lp > 0) || !(t.price > 0)) return;
-        t.rate = Math.round((lp - t.price) / t.price * 10000) / 100;
-        const tr = tbody.querySelector(`tr[data-id="${t.id}"]`);
-        if (!tr) return;
-        const cell = tr.querySelector('.rate');
-        if (!cell) return;
-        const next = rateText(t.rate);
-        if (cell.textContent !== next) {
-            cell.textContent = next;
-            cell.className = 'num rate ' + cls(t.rate);
-        }
-    });
-}
-
-function blip() {
-    const dot = document.getElementById('at-live');
-    if (!dot) return;
-    dot.classList.add('on');
-}
-
-// ---------- 웹소켓 ----------
-let sock = null;
-let watching = '';          // 마지막으로 구독 요청한 종목코드 목록 (중복 요청 방지)
-
-function currentCodes() { return (PF.items || []).map(i => i.stock_code); }
-
-function sendWatch() {
-    if (!sock || sock.readyState !== WebSocket.OPEN) return;
-    const codes = currentCodes();
-    const key = codes.join(',');
-    if (key === watching) return;
-    watching = key;
-    // 가격만 필요하므로 watchPrices (호가 구독 슬롯을 쓰지 않음)
-    sock.send(JSON.stringify({ action: 'watchPrices', codes }));
-}
-
-function connectWs() {
-    try { sock = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/'); } catch (e) { return; }
-
-    sock.onopen = () => { watching = ''; sendWatch(); };
-
-    sock.onmessage = (event) => {
-        let d;
-        try { d = JSON.parse(event.data); } catch { return; }
-        if (d.type !== 'price') return;                     // 체결내역·호가 메시지는 무시
-        if (!d.stock_code || !(d.price > 0)) return;
-        // 내 보유종목이 아니면 무시 (홈 종목들도 같은 소켓으로 흘러온다)
-        if (!PF.items.some(i => i.stock_code === d.stock_code)) return;
-        livePrice.set(d.stock_code, Number(d.price));
-        scheduleRender();
-    };
-
-    sock.onclose = () => {
-        document.getElementById('at-live').classList.remove('on');
-        setTimeout(connectWs, 3000);                        // 끊기면 3초 후 재접속
-    };
-    sock.onerror = () => { document.getElementById('at-live').classList.remove('on'); };
-}
-
-// ---------- 폴링 (새 거래·보유 변화 감지) ----------
-async function poll() {
-    try {
-        const res = await fetch('get_auto_trades.php', { cache: 'no-store' });
-        if (res.status === 401) { location.href = 'login.php?next=auto_trade.php'; return; }
-        const d = await res.json();
-        if (d.error) return;
-
-        adoptPortfolio(d.portfolio);
-        TRADES = d.trades;
-        renderDonut(PF);
-        renderList(PF);
-        mergeTrades(TRADES);
-        updateBuyRates();
-        sendWatch();                                        // 보유종목이 바뀌었으면 구독도 갱신
-        document.getElementById('at-cash').textContent = Number(d.cash).toLocaleString() + '원';
-        if (paused !== !!d.paused) { paused = !!d.paused; renderPause(); }   // 다른 탭에서 바꿨을 때 동기화
-    } catch (err) {
-        // 폴링 실패는 조용히 넘긴다 (시세는 웹소켓이 담당하므로 화면이 멈추지 않음)
     }
-}
+    function applyLive() {                       // 실시간가로 평가금액·비중·수익률·총평가 재계산
+        let shown = 0;
+        PF.items.forEach(it => {
+            const lp = livePrice.get(it.stock_code);
+            if (lp > 0) it.price = lp;
+            it.eval_amount = it.price * it.quantity;
+            it.profit_amount = (it.price - it.avg_price) * it.quantity;
+            it.profit_rate = it.avg_price > 0 ? Math.round((it.price - it.avg_price) / it.avg_price * 10000) / 100 : 0;
+            shown += it.eval_amount;
+        });
+        const total = shown + hiddenEval;         // 비중 분모 = 상위5 실시간 평가금액 + 상위5 밖 종목(서버값)
+        PF.items.forEach(it => { it.weight = total > 0 ? Math.round(it.eval_amount / total * 1000) / 10 : 0; });
+        PF.shown_eval = shown; PF.total_eval = total;
+        PF.shown_ratio = total > 0 ? Math.round(shown / total * 1000) / 10 : 0;
+    }
+    function updateBuyRates() {                   // 구매 행 수익률 = 산 가격 대비 지금 가격
+        TRADES.forEach(t => {
+            if (t.order_type !== 'buy') return;
+            const lp = livePrice.get(t.stock_code);
+            if (lp > 0 && t.price > 0) t.rate = Math.round((lp - t.price) / t.price * 10000) / 100;
+        });
+        mergeTrades(TRADES);
+    }
+    let queued = false;
+    function scheduleRender() {                  // 실시간은 초당 여러 건 → 0.4초 단위로 묶어서 그린다
+        if (queued) return; queued = true;
+        setTimeout(() => {
+            queued = false;
+            applyLive(); renderKpis(PF); renderDonut(PF); renderList(PF); updateBuyRates();
+            const live = $('au-live'); live.classList.add('on'); clearTimeout(live._t); live._t = setTimeout(() => live.classList.remove('on'), 4000);
+        }, 400);
+    }
+    let tries = 0;
+    (function connect() {
+        let ws;
+        try { ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/'); } catch (e) { return; }
+        ws.onopen = () => { tries = 0; };
+        ws.onmessage = ev => {
+            let d; try { d = JSON.parse(ev.data); } catch (e) { return; }
+            if (d.type !== 'price' || !d.stock_code || !(d.price > 0)) return;
+            if (!PF.items.some(i => i.stock_code === d.stock_code)) return;   // 내 상위 보유 종목만
+            livePrice.set(d.stock_code, Number(d.price));
+            scheduleRender();
+        };
+        ws.onclose = () => { tries++; setTimeout(connect, Math.min(15000, 1000 * 2 ** Math.min(tries - 1, 4))); };   // 끊기면 자동 재연결
+    })();
 
-// ---------- 첫 렌더 ----------
-adoptPortfolio(INITIAL.portfolio);
-renderDonut(PF);
-renderList(PF);
-renderTrades(TRADES);
-renderPause();
-connectWs();
-setInterval(poll, 5000);
+    // ================= 5초 폴링 (새 거래 · 보유 변화 · 다른 탭에서 바꾼 스위치) =================
+    async function poll() {
+        try {
+            const res = await fetch('get_auto_trades.php', { cache: 'no-store' });
+            if (res.status === 401) { location.href = 'login.php?next=auto_trade.php'; return; }
+            const d = await res.json();
+            if (d.error) return;
+            cash = d.cash;
+            adoptPortfolio(d.portfolio);
+            TRADES = d.trades;
+            renderKpis(PF); renderDonut(PF); renderList(PF); updateBuyRates();
+            if (paused !== !!d.paused) { paused = !!d.paused; renderSwitch(); }
+        } catch (err) { /* 폴링 실패는 조용히 넘긴다 — 다음 주기에 다시 */ }
+    }
+
+    adoptPortfolio(INITIAL.portfolio);
+    renderKpis(PF); renderDonut(PF); renderList(PF); renderTrades(TRADES); renderSwitch();
+    setInterval(() => { if (!document.hidden) poll(); }, 5000);   // 다른 탭을 보고 있을 땐 쉰다
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
+})();
 </script>
 
 <?php include 'includes/footer.php'; ?>

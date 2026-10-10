@@ -956,6 +956,7 @@ function getAutoPortfolio($conn, $userId, $limit = 5)
 {
     $items = [];
     $totalEval = 0.0;
+    $totalCost = 0.0;   // 전체 보유 매입원가 (평가 손익 = 평가금액 - 매입원가)
 
     foreach (getMyHoldings($conn, $userId) as $r) {
         $qty = (int) $r['quantity'];
@@ -967,6 +968,7 @@ function getAutoPortfolio($conn, $userId, $limit = 5)
 
         $eval = $cur * $qty;
         $totalEval += $eval;
+        $totalCost += $avg * $qty;
 
         $items[] = [
             'stock_code'   => $r['stock_code'],
@@ -998,6 +1000,7 @@ function getAutoPortfolio($conn, $userId, $limit = 5)
         'total_count' => count($items),      // 전체 보유 종목 수 (5개 초과 안내용)
         'shown_eval'  => $shownEval,
         'shown_ratio' => $totalEval > 0 ? round($shownEval / $totalEval * 100, 1) : 0,
+        'total_cost'  => $totalCost,
     ];
 }
 
