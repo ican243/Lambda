@@ -43,6 +43,34 @@
     --radius: 16px;
     --radius-lg: 20px;
     --shadow: 0 2px 8px rgba(0, 23, 51, 0.04), 0 1px 2px rgba(0, 23, 51, 0.06);
+
+    /* 등락 색 — 상승 빨강 / 하락 파랑 / 보합 회색. 연한 버전은 배경·막대용 */
+    --flat: #8b95a1;
+    --up-weak: rgba(240, 68, 82, 0.10);
+    --down-weak: rgba(49, 130, 246, 0.10);
+    --fill: #f2f4f6;        /* 입력창·세그먼트·스켈레톤 등 옅은 회색 면 */
+
+    /* 여백 — 4의 배수로만 쓴다 (화면 전체 리듬이 맞아 보이는 비결) */
+    --sp-1: 4px;
+    --sp-2: 8px;
+    --sp-3: 12px;
+    --sp-4: 16px;
+    --sp-5: 20px;
+    --sp-6: 24px;
+    --sp-8: 32px;
+
+    /* 글자 크기 — 이 7단계 밖의 크기는 만들지 않는다 */
+    --fs-xs: 12px;      /* 보조 라벨 */
+    --fs-sm: 13px;      /* 표·작은 설명 */
+    --fs-md: 15px;      /* 본문 기본 */
+    --fs-lg: 17px;      /* 카드 제목 */
+    --fs-xl: 22px;      /* 강조 숫자 */
+    --fs-2xl: 28px;     /* 모바일 현재가 */
+    --fs-hero: 34px;    /* PC 현재가 (가장 큰 글자) */
+
+    /* 작은 모서리 (버튼·칩) */
+    --radius-sm: 10px;
+    --radius-md: 14px;
 }
 
 /* ---------- 3. 기본 리셋 ---------- */
@@ -604,4 +632,252 @@ body {
 @media (max-width: 560px) {
     .chart-ranges button { padding: 6px 8px; font-size: 12px; }
     .chart-ranges .cr-note { display: none; }
+}
+
+/* =========================================================
+   섹션21. 종목 상세 v3 — 토스형 고정 배치
+   - 클래스 이름은 전부 sd- 로 시작 → 다른 화면(메인·내 계좌·자동매매)과 절대 안 겹친다.
+   - PC: 왼쪽 [차트 → 요약카드 → 상세탭] / 오른쪽 [호가 → 주문] (오른쪽은 스크롤해도 따라옴)
+   - 휴대폰(900px 이하): 한 줄로 쌓고, 차트↔호가는 탭으로 전환, 주문은 하단 고정 버튼 → 아래에서 올라오는 시트
+   ========================================================= */
+
+/* 숫자는 모두 고정폭 → 가격이 바뀌어도 글자가 좌우로 흔들리지 않는다 */
+.sd { font-variant-numeric: tabular-nums; }
+.sd .up   { color: var(--up); }
+.sd .down { color: var(--down); }
+.sd .flat { color: var(--flat); }
+
+.sd-back { display: inline-flex; align-items: center; gap: var(--sp-1); color: var(--text-sub); text-decoration: none;
+           font-size: var(--fs-md); font-weight: 600; margin-bottom: var(--sp-4); }
+.sd-back:hover { color: var(--text); }
+
+/* ---------- 상단: 종목명·가격·별 ---------- */
+.sd-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-3); margin-bottom: var(--sp-6); }
+.sd-id { display: flex; align-items: center; gap: var(--sp-2); }
+.sd-logo { position: relative; width: 28px; height: 28px; border-radius: 50%; flex: none; overflow: hidden;
+           display: inline-flex; align-items: center; justify-content: center; color: #fff; font-size: var(--fs-sm); font-weight: 700; }
+.sd-logo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #fff; }
+.sd-name { font-size: var(--fs-lg); font-weight: 700; color: var(--text); }
+.sd-code { font-size: var(--fs-sm); color: var(--text-sub); font-weight: 500; }
+.sd-price { font-size: var(--fs-hero); font-weight: 700; line-height: 1.2; margin-top: var(--sp-2); letter-spacing: -0.03em;
+            border-radius: 8px; display: inline-block; padding: 0 var(--sp-1); margin-left: calc(var(--sp-1) * -1); }
+.sd-change { font-size: var(--fs-md); font-weight: 600; margin-top: var(--sp-1); }
+.sd-change .lbl { color: var(--text-sub); font-weight: 500; margin-right: var(--sp-1); }
+
+/* 관심종목 별 — 손가락으로 누르기 쉬운 44px */
+.sd-star { width: 44px; height: 44px; flex: none; border: none; border-radius: 50%; background: transparent; cursor: pointer;
+           display: inline-flex; align-items: center; justify-content: center; color: #c9d2dc; transition: background .15s, transform .1s; }
+.sd-star:hover { background: var(--fill); }
+.sd-star:active { transform: scale(.92); }
+.sd-star svg { width: 26px; height: 26px; }
+.sd-star.on { color: #ffc342; }
+.sd-star:disabled { opacity: .5; cursor: default; }
+
+/* 가격 깜빡임 — 오르면 빨강, 내리면 파랑으로 잠깐 */
+@keyframes sdFlashUp   { 0% { background: var(--up-weak); }   100% { background: transparent; } }
+@keyframes sdFlashDown { 0% { background: var(--down-weak); } 100% { background: transparent; } }
+.sd-flash-up   { animation: sdFlashUp .7s ease-out; }
+.sd-flash-down { animation: sdFlashDown .7s ease-out; }
+
+/* ---------- 2단 배치 ---------- */
+.sd-layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: var(--sp-6); align-items: start; }
+.sd-main, .sd-side { display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; }
+.sd-side { position: sticky; top: 80px; }
+
+.sd-card { background: var(--card); border-radius: var(--radius-lg); box-shadow: var(--shadow); padding: var(--sp-5); min-width: 0; }
+.sd-card-h { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); margin-bottom: var(--sp-4); }
+.sd-card-t { font-size: var(--fs-lg); font-weight: 700; display: inline-flex; align-items: center; gap: var(--sp-2); }
+
+/* 실시간 표시 점 — 데이터가 들어오는 동안만 빨갛게 깜빡 */
+.sd-live { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-xs); font-weight: 600; color: var(--text-sub); }
+.sd-live i { width: 6px; height: 6px; border-radius: 50%; background: #c9d2dc; }
+.sd-live.on { color: var(--up); }
+.sd-live.on i { background: var(--up); animation: blip 1.2s infinite; }
+
+/* ---------- 차트 ---------- */
+.sd-chart-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); margin-bottom: var(--sp-3); flex-wrap: wrap; }
+.sd-ranges { display: flex; gap: 2px; }
+.sd-ranges button { border: none; background: none; min-width: 44px; height: 34px; padding: 0 var(--sp-2); border-radius: var(--radius-sm);
+                    font-family: inherit; font-size: var(--fs-sm); font-weight: 600; color: var(--text-sub); cursor: pointer; transition: background .15s, color .15s; white-space: nowrap; }
+.sd-ranges button:hover { background: var(--fill); color: var(--text); }
+.sd-ranges button.on { background: var(--text); color: #fff; }
+.sd-seg { display: inline-flex; background: var(--fill); border-radius: var(--radius-sm); padding: 3px; }
+.sd-seg button { border: none; background: none; height: 28px; padding: 0 var(--sp-3); border-radius: 8px; font-family: inherit;
+                 font-size: var(--fs-sm); font-weight: 600; color: var(--text-sub); cursor: pointer; }
+.sd-seg button.on { background: #fff; color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+
+.sd-chart-wrap { position: relative; height: 380px; }
+.sd-chart { position: absolute; inset: 0; }
+.sd-chart-note { font-size: var(--fs-xs); color: var(--text-sub); margin-top: var(--sp-2); text-align: right; min-height: 16px; }
+/* 기간을 바꾸는 동안 기존 차트를 살짝 흐리게 (눌렀는데 반응 없는 것처럼 보이지 않게) */
+.sd-chart-wrap.is-busy .sd-chart { opacity: .35; transition: opacity .15s; }
+
+/* ---------- 상태 화면 (로딩 스켈레톤 / 데이터 없음 / 오류) ---------- */
+@keyframes sdShimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+.sd-skel { display: block; border-radius: 6px; background: linear-gradient(90deg, var(--fill) 25%, #e9ecef 37%, var(--fill) 63%);
+           background-size: 400% 100%; animation: sdShimmer 1.4s ease infinite; }
+.sd-skel-chart { position: absolute; inset: 0; border-radius: var(--radius); z-index: 5; }   /* 차트 캔버스보다 위 층 */
+.sd-skel-txt { height: 18px; width: 70%; }
+
+.sd-state { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: var(--sp-2); text-align: center; background: var(--card); padding: var(--sp-4); z-index: 5; }   /* 차트 캔버스가 버튼을 덮지 않게 */
+.sd-state.inline { position: static; padding: var(--sp-8) var(--sp-4); }
+.sd-state .ico { font-size: 28px; line-height: 1; }
+.sd-state .tt { font-size: var(--fs-md); font-weight: 700; color: var(--text); }
+.sd-state .ds { font-size: var(--fs-sm); color: var(--text-sub); line-height: 1.5; }
+.sd-retry { margin-top: var(--sp-2); border: none; background: var(--fill); color: var(--text); font-family: inherit; font-weight: 600;
+            font-size: var(--fs-sm); height: 36px; padding: 0 var(--sp-4); border-radius: var(--radius-sm); cursor: pointer; }
+.sd-retry:hover { background: #e5e8eb; }
+[hidden] { display: none !important; }
+
+/* ---------- 요약 카드 5개 (시가·고가·저가·거래량·거래대금) ---------- */
+.sd-stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--sp-3); }
+.sd-stat { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: var(--sp-4); min-width: 0; }
+.sd-stat .k { font-size: var(--fs-sm); color: var(--text-sub); font-weight: 600; }
+.sd-stat .v { font-size: var(--fs-lg); font-weight: 700; margin-top: var(--sp-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sd-stat .v .sd-skel { height: 20px; width: 80%; margin-top: 2px; }
+
+.sd-stats-err { grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; gap: var(--sp-3);
+                font-size: var(--fs-sm); color: var(--text-sub); }
+.sd-stats-err .sd-retry { margin-top: 0; }
+
+/* ---------- 호가 5단계 ---------- */
+.sd-ob-head, .sd-ob-row { display: grid; grid-template-columns: 1fr 112px 1fr; align-items: center; }
+.sd-ob-head { font-size: var(--fs-xs); color: var(--text-sub); font-weight: 600; padding-bottom: var(--sp-2); }
+.sd-ob-head span:first-child { text-align: right; padding-right: var(--sp-2); }
+.sd-ob-head span:nth-child(2) { text-align: center; }
+.sd-ob-head span:last-child { padding-left: var(--sp-2); }
+
+.sd-ob-row { height: 44px; font-size: var(--fs-sm); }
+.sd-ob-row + .sd-ob-row { margin-top: 2px; }
+.sd-ob-ask { background: linear-gradient(90deg, rgba(49,130,246,.04), rgba(49,130,246,.04)); }   /* 매도(파랑 쪽) */
+.sd-ob-bid { background: linear-gradient(90deg, rgba(240,68,82,.04), rgba(240,68,82,.04)); }    /* 매수(빨강 쪽) */
+
+.sd-ob-qty { position: relative; height: 100%; display: flex; align-items: center; }
+.sd-ob-qty .bar { position: absolute; top: 8px; bottom: 8px; border-radius: 4px; transition: width .25s ease; }
+.sd-ob-qty .n { position: relative; font-weight: 500; color: #4e5968; }
+.sd-ob-ask .sd-ob-qty { justify-content: flex-end; padding-right: var(--sp-2); }
+.sd-ob-ask .sd-ob-qty .bar { right: 0; background: rgba(49,130,246,.18); }
+.sd-ob-bid .sd-ob-qty { padding-left: var(--sp-2); }
+.sd-ob-bid .sd-ob-qty .bar { left: 0; background: rgba(240,68,82,.18); }
+
+.sd-ob-px { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 8px;
+            border: 2px solid transparent; line-height: 1.15; }
+.sd-ob-px b { font-size: var(--fs-md); font-weight: 700; }
+.sd-ob-px small { font-size: 11px; font-weight: 500; }
+/* 지금 체결된 가격과 같은 줄 = 굵은 테두리로 강조 */
+.sd-ob-row.is-now .sd-ob-px { border-color: var(--text); background: #fff; }
+
+.sd-ob-sum { display: grid; grid-template-columns: 1fr 112px 1fr; margin-top: var(--sp-3); padding-top: var(--sp-3);
+             border-top: 1px solid var(--line); font-size: var(--fs-sm); }
+.sd-ob-sum span:first-child { text-align: right; padding-right: var(--sp-2); color: var(--down); font-weight: 600; }
+.sd-ob-sum span:nth-child(2) { text-align: center; color: var(--text-sub); font-size: var(--fs-xs); font-weight: 600; }
+.sd-ob-sum span:last-child { padding-left: var(--sp-2); color: var(--up); font-weight: 600; }
+.sd-ob-skel { height: 44px; margin-top: 2px; border-radius: 8px; }
+
+/* ---------- 주문 패널 (기능은 다음 단계 — 지금은 기존 주문 기능을 그대로 연결) ---------- */
+.sd-order .cash { display: flex; justify-content: space-between; align-items: center; font-size: var(--fs-sm); color: var(--text-sub);
+                  font-weight: 600; padding-bottom: var(--sp-3); margin-bottom: var(--sp-4); border-bottom: 1px solid var(--line); }
+.sd-order .cash b { color: var(--text); font-size: var(--fs-md); }
+.sd-order .est { display: flex; justify-content: space-between; font-size: var(--fs-sm); color: var(--text-sub); margin: var(--sp-3) 2px 0; }
+.sd-order .est b { color: var(--text); font-size: var(--fs-md); }
+.sd-order-btns { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); margin-top: var(--sp-4); }
+.sd-btn { height: 52px; border: none; border-radius: var(--radius-md); font-family: inherit; font-size: var(--fs-md); font-weight: 700;
+          color: #fff; cursor: pointer; transition: filter .15s, transform .05s; text-decoration: none;
+          display: inline-flex; align-items: center; justify-content: center; }
+.sd-btn:hover { filter: brightness(.95); }
+.sd-btn:active { transform: scale(.98); }
+.sd-btn:disabled { opacity: .5; cursor: default; }
+.sd-btn.buy  { background: var(--up); }
+.sd-btn.sell { background: var(--down); }
+.sd-btn.primary { background: var(--primary); width: 100%; }
+.sd-order .hint { font-size: var(--fs-sm); color: var(--text-sub); line-height: 1.5; margin: 0 0 var(--sp-4); }
+.sd-order.w-highlight { animation: wHighlight 1.6s ease-out; outline: 2px solid var(--primary); outline-offset: -2px; }
+.sd-sheet-close { display: none; }
+
+/* ---------- 아래쪽 상세 탭 (체결·투자자·종목정보·커뮤니티) ---------- */
+.sd-tabs { display: flex; gap: var(--sp-5); border-bottom: 1px solid var(--line); margin: calc(var(--sp-1) * -1) 0 var(--sp-4); overflow-x: auto; }
+.sd-tabs button { border: none; background: none; padding: var(--sp-3) 0; font-family: inherit; font-size: var(--fs-md); font-weight: 700;
+                  color: var(--text-sub); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+.sd-tabs button.on { color: var(--text); border-bottom-color: var(--text); }
+.sd-pane-sub { display: flex; justify-content: space-between; font-size: var(--fs-sm); color: var(--text-sub); margin-bottom: var(--sp-2); }
+.sd-pane-sub b { color: var(--text); }
+
+.sd-tbl { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.sd-tbl th { color: var(--text-sub); font-weight: 600; font-size: var(--fs-xs); text-align: right; padding: var(--sp-2); border-bottom: 1px solid var(--line); }
+.sd-tbl td { text-align: right; padding: 10px var(--sp-2); border-bottom: 1px solid #f2f4f6; }
+.sd-tbl th:first-child, .sd-tbl td:first-child { text-align: left; }
+.sd-tbl td:first-child { color: var(--text-sub); }
+.sd-tbl tr:last-child td { border-bottom: none; }
+.sd-scroll { max-height: 360px; overflow-y: auto; }
+
+.sd-info { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--sp-8); }
+.sd-info-row { display: flex; justify-content: space-between; gap: var(--sp-2); padding: var(--sp-3) 0; border-bottom: 1px solid #f2f4f6; font-size: var(--fs-md); }
+.sd-info-row .k { color: var(--text-sub); }
+.sd-info-row .v { font-weight: 600; text-align: right; }
+
+.sd-posts { max-height: 360px; overflow-y: auto; margin-bottom: var(--sp-3); }
+.sd-post { padding: var(--sp-3) 0; border-bottom: 1px solid #f2f4f6; }
+.sd-post .m { font-size: var(--fs-xs); color: var(--text-sub); display: flex; gap: var(--sp-2); margin-bottom: var(--sp-1); }
+.sd-post .m b { color: var(--text); }
+.sd-post .b { font-size: var(--fs-md); line-height: 1.55; word-break: break-word; }
+.sd-post-form { display: flex; gap: var(--sp-2); }
+.sd-post-form textarea { flex: 1; resize: none; height: 48px; border: none; border-radius: var(--radius-md); padding: var(--sp-3) var(--sp-4);
+                         font-family: inherit; font-size: 16px; background: var(--fill); }   /* 16px 미만이면 iOS 자동확대 */
+.sd-post-form textarea:focus { outline: none; background: #fff; box-shadow: 0 0 0 2px var(--primary) inset; }
+.sd-post-form button { height: 48px; padding: 0 var(--sp-5); width: auto; }
+
+/* 실시간 연결 상태 안내 (끊겼을 때만 아래에 작게) */
+.sd-conn { position: fixed; left: 50%; bottom: var(--sp-6); transform: translateX(-50%); z-index: 300;
+           background: rgba(25,31,40,.9); color: #fff; font-size: var(--fs-sm); font-weight: 600;
+           padding: 10px var(--sp-4); border-radius: 999px; box-shadow: 0 6px 20px rgba(0,0,0,.18); }
+
+/* 휴대폰 전용 요소는 PC에서 숨김 */
+.sd-mtabs, .sd-bottombar, .sd-dim { display: none; }
+
+/* ---------- 휴대폰 (900px 이하) ---------- */
+@media (max-width: 900px) {
+    .sd { padding-bottom: 84px; }                       /* 하단 고정 버튼에 내용이 가리지 않게 */
+    .sd-layout { display: flex; flex-direction: column; align-items: stretch; gap: var(--sp-4); }   /* stretch: 카드가 화면 폭을 꽉 채우게 */
+    .sd-main, .sd-side { display: contents; }           /* 두 칸을 풀어서 카드 순서를 자유롭게 */
+    .sd-chart-card, .sd-book { order: 1; }
+    .sd-stats { order: 2; }
+    .sd-more  { order: 3; }
+
+    /* 차트 ↔ 호가 탭 */
+    .sd-mtabs { display: flex; background: var(--fill); border-radius: var(--radius-md); padding: 4px; margin-bottom: var(--sp-4); }
+    .sd-mtabs button { flex: 1; height: 40px; border: none; background: none; border-radius: var(--radius-sm); font-family: inherit;
+                       font-size: var(--fs-md); font-weight: 700; color: var(--text-sub); cursor: pointer; }
+    .sd-mtabs button.on { background: #fff; color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .sd[data-mtab="chart"] .sd-book { display: none; }
+    .sd[data-mtab="book"] .sd-chart-card { display: none; }
+
+    .sd-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .sd-chart-wrap { height: 300px; }
+    .sd-card { padding: var(--sp-4); }
+
+    /* 주문 패널 → 아래에서 올라오는 시트 */
+    .sd-order { position: fixed; left: 0; right: 0; bottom: 0; z-index: 400; border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+                padding: var(--sp-5) var(--sp-5) calc(var(--sp-5) + env(safe-area-inset-bottom));
+                transform: translateY(105%); visibility: hidden; transition: transform .25s ease, visibility 0s .25s; box-shadow: 0 -8px 30px rgba(0,23,51,.16); }
+    .sd-order.open { transform: translateY(0); visibility: visible; transition: transform .25s ease; }   /* 닫혀 있을 땐 Tab 키로도 못 들어가게 */
+    .sd-sheet-close { display: inline-flex; width: 36px; height: 36px; border: none; background: var(--fill); border-radius: 50%;
+                      align-items: center; justify-content: center; font-size: 18px; color: var(--text-sub); cursor: pointer; }
+    .sd-dim { display: block; position: fixed; inset: 0; z-index: 390; background: rgba(0,0,0,.35); opacity: 0; pointer-events: none; transition: opacity .25s; }
+    .sd-dim.open { opacity: 1; pointer-events: auto; }
+
+    .sd-bottombar { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); position: fixed; left: 0; right: 0; bottom: 0; z-index: 350;
+                    background: var(--card); border-top: 1px solid var(--line);
+                    padding: var(--sp-3) var(--sp-4) calc(var(--sp-3) + env(safe-area-inset-bottom)); }
+    .sd-conn { bottom: 96px; }
+}
+@media (max-width: 560px) {
+    .sd-price { font-size: var(--fs-2xl); }
+    .sd-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .sd-stat:last-child { grid-column: span 2; }
+    .sd-ranges button { min-width: 0; flex: 1; padding: 0 6px; }
+    .sd-ranges { flex: 1; }
+    .sd-chart-bar { gap: var(--sp-2); }
+    .sd-info { grid-template-columns: 1fr; }
+    .sd-ob-head, .sd-ob-row, .sd-ob-sum { grid-template-columns: 1fr 104px 1fr; }
 }

@@ -32,6 +32,8 @@ function getKisAccessToken()
     curl_setopt_array($curl, [
         CURLOPT_URL => $url,
         CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CONNECTTIMEOUT => 3,   // KIS 서버가 아예 응답 없으면 3초 만에 포기 (안 그러면 PHP 일꾼이 전부 묶여 사이트 전체가 멈춤)
+        CURLOPT_TIMEOUT => 10,
         CURLOPT_POST => true,
         CURLOPT_HTTPHEADER => ["content-type: application/json"],
         CURLOPT_POSTFIELDS => json_encode($data),
@@ -69,6 +71,8 @@ function getStockPrice($stockCode, $retryCount = 0)
     curl_setopt_array($curl, [
         CURLOPT_URL => $url,
         CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CONNECTTIMEOUT => 3,   // KIS 서버가 아예 응답 없으면 3초 만에 포기 (안 그러면 PHP 일꾼이 전부 묶여 사이트 전체가 멈춤)
+        CURLOPT_TIMEOUT => 10,
         CURLOPT_HTTPHEADER => [
             "content-type: application/json",
             "authorization: Bearer " . $token,
@@ -204,6 +208,7 @@ function kisQuotationGet($path, $trId, $params, $retryCount = 0)
     curl_setopt_array($curl, [
         CURLOPT_URL => $url,
         CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CONNECTTIMEOUT => 3,   // KIS 서버가 아예 응답 없으면 3초 만에 포기 (안 그러면 PHP 일꾼이 전부 묶여 사이트 전체가 멈춤)
         CURLOPT_TIMEOUT => 10,
         CURLOPT_HTTPHEADER => [
             "content-type: application/json",
@@ -489,6 +494,8 @@ function getHashKey($data)
     $curl = curl_init();
     curl_setopt_array($curl, [
         CURLOPT_URL => $url,
+        CURLOPT_CONNECTTIMEOUT => 3,   // KIS 서버가 아예 응답 없으면 3초 만에 포기 (안 그러면 PHP 일꾼이 전부 묶여 사이트 전체가 멈춤)
+        CURLOPT_TIMEOUT => 10,
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_POST => true,
         CURLOPT_HTTPHEADER => [
@@ -531,6 +538,7 @@ function placeStockOrder($stockCode, $quantity, $orderType, $retryCount = 0)
     curl_setopt_array($curl, [
         CURLOPT_URL => $url,
         CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CONNECTTIMEOUT => 3,   // KIS 서버가 아예 응답 없으면 3초 만에 포기 (안 그러면 PHP 일꾼이 전부 묶여 사이트 전체가 멈춤)
         CURLOPT_POST => true,
         CURLOPT_TIMEOUT => 10,   // 10초 이상 응답 없으면 포기하고 재시도 판단
         CURLOPT_HTTPHEADER => [

@@ -6,15 +6,36 @@ startUserSession();
 // 비로그인도 종목/차트/호가/체결을 볼 수 있는 공개 페이지. (거래·관심등록만 로그인 요구)
 $loggedIn = isLoggedIn();
 
-$stockCode = trim($_GET['code'] ?? '');
+$stockCode = strtoupper(trim($_GET['code'] ?? ''));
 if ($stockCode === '') {
     header('Location: index.php');
     exit;
 }
 
-$stock = getSingleStockPrice($conn, $stockCode);
+// 종목코드는 영문대문자·숫자 6자리만 허용 → 이상한 값은 DB 조회도 하지 않는다
+$stock = preg_match('/^[0-9A-Z]{6}$/', $stockCode) ? getSingleStockPrice($conn, $stockCode) : null;
+
+$pageClass = 'app-wide';   // 메인과 같은 폭(1180px) — 화면 가장자리까지 퍼지지 않아 눈이 덜 바쁘다
+
+// 없는 종목 → 하얀 글씨 한 줄(die) 대신 메인과 같은 모양의 안내 화면
 if (!$stock) {
-    die('존재하지 않는 종목입니다.');
+    http_response_code(404);
+    include 'includes/header.php';
+    ?>
+    <div class="sd">
+        <a href="index.php" class="sd-back">← 목록으로</a>
+        <div class="sd-card">
+            <div class="sd-state inline">
+                <div class="ico">🔍</div>
+                <div class="tt">종목을 찾을 수 없어요</div>
+                <div class="ds">종목코드를 다시 확인하거나, 위 검색창에서 이름으로 찾아보세요.</div>
+                <a href="index.php" class="sd-retry" style="display:inline-flex;align-items:center;text-decoration:none;">홈으로 가기</a>
+            </div>
+        </div>
+    </div>
+    <?php
+    include 'includes/footer.php';
+    exit;
 }
 
 // 조회수 +1 (홈 우측 "지금 많이 봐요" 랭킹 집계용)
@@ -22,627 +43,755 @@ recordStockView($conn, $stockCode);
 
 $isFav   = $loggedIn ? isInWatchlist($conn, $_SESSION['user_id'], $stockCode) : false;
 $account = $loggedIn ? getMyAccount($conn, $_SESSION['user_id']) : null;
+$cash    = (int) ($account['cash_balance'] ?? 0);   // 계좌 행이 없는 회원이어도 경고 없이 0원
+
+// 첫 화면에 바로 보일 가격(DB 최신값). 이후 KIS 시세·실시간이 오면 갱신된다.
+$price  = (int) ($stock['price'] ?? 0);
+$chg    = (int) ($stock['change_price'] ?? 0);
+$rate   = (float) ($stock['change_rate'] ?? 0);
+$dirCls = $chg > 0 ? 'up' : ($chg < 0 ? 'down' : 'flat');
 
 // 로고 색 (종목코드 해시 → 파스텔). 실제 이미지 있으면 이미지로 대체.
 $hue = crc32($stockCode) % 360;
 
-$pageClass = 'app-xwide';   // 상세는 토스처럼 화면 넓게
 include 'includes/header.php';
 ?>
 
-<!-- 상세 차트 + 위젯 대시보드(이동·리사이즈): 로컬 라이브러리 (CDN 왕복 제거) -->
 <script src="assets/lightweight-charts.js"></script>
-<link href="assets/gridstack.min.css" rel="stylesheet">
-<script src="assets/gridstack-all.js"></script>
 
-<a href="index.php" class="muted" style="text-decoration:none;font-size:15px;font-weight:600;display:inline-block;margin-bottom:14px;">← 목록으로</a>
+<div class="sd" id="sd" data-mtab="chart">
+    <a href="index.php" class="sd-back">← 목록으로</a>
 
-<!-- ===== 헤더: 로고 + 종목명/가격 + 관심등록 ===== -->
-<div class="dv-head">
-    <div class="dv-title">
-        <span class="dv-logo" style="background:hsl(<?= $hue ?>,70%,72%);">
-            <img src="assets/logos/<?= htmlspecialchars($stockCode) ?>.png" alt="" onerror="this.remove()">
-            <?= mb_substr($stock['stock_name'], 0, 1) ?>
-        </span>
-        <div class="price-hero">
-            <div class="nm"><?= htmlspecialchars($stock['stock_name']) ?> <span class="muted" style="font-size:14px;">· <?= htmlspecialchars($stockCode) ?></span></div>
-            <div id="detail-price" class="pr"><?= $stock['price'] ? number_format($stock['price']) . '원' : '-' ?></div>
-            <div id="detail-change" class="rt <?= $stock['change_price'] > 0 ? 'up' : ($stock['change_price'] < 0 ? 'down' : 'muted') ?>">
-                어제보다 <?= $stock['change_price'] > 0 ? '+' : '' ?><?= number_format($stock['change_price'] ?? 0) ?>원
-                (<?= $stock['change_rate'] ?? 0 ?>%)
-            </div>
-        </div>
-    </div>
-    <button id="fav-btn" class="btn-t <?= $isFav ? 'btn-ghost-t' : 'btn-primary-t' ?>"
-        style="padding:9px 16px;font-size:14px;white-space:nowrap;" data-fav="<?= $isFav ? '1' : '0' ?>">
-        <?= $isFav ? '♥ 관심종목' : '♡ 관심등록' ?>
-    </button>
-</div>
-
-<!-- ===== 지표 스트립 ===== -->
-<div class="metric-strip">
-    <div class="metric">
-        <span class="mk">1일 범위</span>
-        <div class="range-row"><span id="m-day-lo">-</span><span class="range-bar"><span class="dot" id="m-day-dot"></span></span><span id="m-day-hi">-</span></div>
-    </div>
-    <div class="metric">
-        <span class="mk">52주 범위</span>
-        <div class="range-row"><span id="m-52-lo">-</span><span class="range-bar"><span class="dot" id="m-52-dot"></span></span><span id="m-52-hi">-</span></div>
-    </div>
-    <div class="metric">
-        <span class="mk">거래대금</span>
-        <span class="mv" id="m-trval">-</span>
-    </div>
-    <div class="metric">
-        <span class="mk">체결강도</span>
-        <span class="mv" id="m-strength">-</span>
-    </div>
-</div>
-
-<!-- ===== 탭 + 편집 툴바 ===== -->
-<div class="dv-bar">
-    <div class="dv-tabs">
-        <button id="tab-chart" class="on" onclick="switchTab('chart')">차트·호가</button>
-        <button id="tab-info" onclick="switchTab('info')">종목정보</button>
-    </div>
-    <div class="dv-tools" id="dv-tools">
-        <span class="dv-hint"><svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="4" r="1.3"/><circle cx="11" cy="4" r="1.3"/><circle cx="5" cy="8" r="1.3"/><circle cx="11" cy="8" r="1.3"/><circle cx="5" cy="12" r="1.3"/><circle cx="11" cy="12" r="1.3"/></svg> 끌어서 이동 · 모서리 잡고 크기조절</span>
-        <button class="dv-reset" onclick="resetLayout()">배치 초기화</button>
-    </div>
-</div>
-
-<!-- ===== 탭1: 차트·호가 (gridstack: 이동 + 칸단위 리사이즈) ===== -->
-<div id="pane-chart" class="grid-stack">
-    <!-- 차트 -->
-    <div class="grid-stack-item" gs-id="chart" gs-w="8" gs-h="7" gs-min-w="4" gs-min-h="4">
-        <div class="grid-stack-item-content widget" data-w="chart">
-            <div class="widget-h">
-                <span class="wt">차트</span>
-                <span class="wh-right">
-                    <div class="seg">
-                        <button id="btn-candle" class="on" onclick="switchChartType('candle')">캔들</button>
-                        <button id="btn-line" onclick="switchChartType('line')">라인</button>
-                    </div>
-                    <span class="drag-handle" title="끌어서 이동"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="4" r="1.4"/><circle cx="11" cy="4" r="1.4"/><circle cx="5" cy="8" r="1.4"/><circle cx="11" cy="8" r="1.4"/><circle cx="5" cy="12" r="1.4"/><circle cx="11" cy="12" r="1.4"/></svg></span>
+    <!-- ===== 상단: 종목명 · 현재가 · 등락 · 관심 별 ===== -->
+    <header class="sd-head">
+        <div>
+            <div class="sd-id">
+                <span class="sd-logo" style="background:hsl(<?= $hue ?>,62%,62%);">
+                    <img src="assets/logos/<?= htmlspecialchars($stockCode) ?>.png" alt="" onerror="this.remove()">
+                    <?= htmlspecialchars(mb_substr($stock['stock_name'], 0, 1)) ?>
                 </span>
+                <span class="sd-name"><?= htmlspecialchars($stock['stock_name']) ?></span>
+                <span class="sd-code"><?= htmlspecialchars($stockCode) ?></span>
             </div>
-            <!-- 기간 탭 — 누르는 기간에 따라 서버가 해상도(1분봉/5분봉/일봉)를 알아서 바꿔준다.
-                 그래서 '1년'을 눌러도 캔들 수가 수백 개로 유지되고 브라우저가 안 무거워진다. -->
-            <div class="chart-ranges" id="chart-ranges">
-                <button class="on" data-range="1D">1일</button>
-                <button data-range="1W">1주</button>
-                <button data-range="1M">1개월</button>
-                <button data-range="3M">3개월</button>
-                <button data-range="1Y">1년</button>
-                <button data-range="2Y">2년</button>
-                <span class="cr-note" id="chart-note">1분봉</span>
+            <div class="sd-price" id="sd-price"><?= $price ? number_format($price) . '원' : '—' ?></div>
+            <div class="sd-change">
+                <span class="lbl">어제보다</span>
+                <span id="sd-change" class="<?= $dirCls ?>"><?= $price ? ($chg > 0 ? '+' : '') . number_format($chg) . '원 (' . ($rate > 0 ? '+' : '') . number_format($rate, 2) . '%)' : '—' ?></span>
             </div>
-            <div id="chart-container" style="width:100%;"></div>
         </div>
+        <button type="button" id="sd-star" class="sd-star<?= $isFav ? ' on' : '' ?>"
+                aria-pressed="<?= $isFav ? 'true' : 'false' ?>" title="<?= $isFav ? '관심종목에서 빼기' : '관심종목에 추가' ?>">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2.8l2.82 5.72 6.31.92-4.57 4.45 1.08 6.29L12 17.21l-5.64 2.97 1.08-6.29L2.87 9.44l6.31-.92L12 2.8z"/></svg>
+        </button>
+    </header>
+
+    <!-- 휴대폰에서만 보이는 차트/호가 전환 탭 -->
+    <div class="sd-mtabs" role="tablist">
+        <button type="button" class="on" data-mtab="chart">차트</button>
+        <button type="button" data-mtab="book">호가</button>
     </div>
 
-    <!-- 주문 패널 -->
-    <div class="grid-stack-item" gs-id="order" gs-w="4" gs-h="7" gs-min-w="3" gs-min-h="4">
-        <div class="grid-stack-item-content widget" data-w="order" id="order">
-            <div class="widget-h"><span class="wt">주문하기</span><span class="drag-handle" title="끌어서 이동"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="4" r="1.4"/><circle cx="11" cy="4" r="1.4"/><circle cx="5" cy="8" r="1.4"/><circle cx="11" cy="8" r="1.4"/><circle cx="5" cy="12" r="1.4"/><circle cx="11" cy="12" r="1.4"/></svg></span></div>
-            <?php if ($loggedIn): ?>
-                <div class="op-cash">
-                    <span class="muted" style="font-size:14px;font-weight:600;">주문 가능 현금</span>
-                    <span class="v"><?= number_format($account['cash_balance']) ?>원</span>
-                </div>
-                <form id="trade-form-detail" action="trade_process.php" method="POST">
-                    <?= csrfField() ?>
-                    <input type="hidden" name="stock_code" value="<?= htmlspecialchars($stockCode) ?>">
-                    <input type="hidden" name="order_type" id="order-type-field">
-                    <label class="label-t">수량</label>
-                    <input type="number" id="qty" name="quantity" class="input-t" min="1" required placeholder="주문 수량" oninput="updateEstimate()">
-                    <div class="order-est"><span>예상 주문금액</span><span class="v" id="estimate">0원</span></div>
-                    <div style="display:flex;gap:10px;margin-top:14px;">
-                        <button type="button" onclick="submitOrder('sell')" class="btn-t btn-blue-t btn-block">판매</button>
-                        <button type="button" onclick="submitOrder('buy')" class="btn-t btn-red-t btn-block">구매</button>
+    <div class="sd-layout">
+        <!-- ===================== 왼쪽 ===================== -->
+        <div class="sd-main">
+            <!-- 차트 -->
+            <section class="sd-card sd-chart-card">
+                <div class="sd-chart-bar">
+                    <div class="sd-ranges" id="sd-ranges">
+                        <button type="button" class="on" data-range="1D">1일</button>
+                        <button type="button" data-range="1W">1주</button>
+                        <button type="button" data-range="1M">1달</button>
+                        <button type="button" data-range="3M">3달</button>
+                        <button type="button" data-range="1Y">1년</button>
+                        <button type="button" data-range="2Y">2년</button>
                     </div>
-                </form>
-            <?php else: ?>
-                <p class="muted" style="font-size:14px;margin:6px 0 16px;">로그인하면 1,000만원 모의자금으로 사고팔 수 있어요.</p>
-                <a href="login.php" class="btn-t btn-primary-t btn-block" style="text-decoration:none;">로그인하고 거래하기</a>
-            <?php endif; ?>
+                    <div class="sd-seg" id="sd-type">
+                        <button type="button" data-type="line">선</button>
+                        <button type="button" data-type="candle">캔들</button>
+                    </div>
+                </div>
+                <div class="sd-chart-wrap" id="sd-chart-wrap">
+                    <div class="sd-chart" id="sd-chart"></div>
+                    <div class="sd-skel sd-skel-chart" id="sd-chart-skel"></div>
+                    <div class="sd-state" id="sd-chart-state" hidden></div>
+                </div>
+                <div class="sd-chart-note" id="sd-chart-note"></div>
+            </section>
+
+            <!-- 요약 카드 5개 -->
+            <section class="sd-stats" id="sd-stats">
+                <div class="sd-stat"><div class="k">시가</div><div class="v" id="st-open"><span class="sd-skel"></span></div></div>
+                <div class="sd-stat"><div class="k">고가</div><div class="v" id="st-high"><span class="sd-skel"></span></div></div>
+                <div class="sd-stat"><div class="k">저가</div><div class="v" id="st-low"><span class="sd-skel"></span></div></div>
+                <div class="sd-stat"><div class="k">거래량</div><div class="v" id="st-vol"><span class="sd-skel"></span></div></div>
+                <div class="sd-stat"><div class="k">거래대금</div><div class="v" id="st-tv"><span class="sd-skel"></span></div></div>
+            </section>
+
+            <!-- 상세 탭: 체결 · 투자자 · 종목정보 · 커뮤니티 -->
+            <section class="sd-card sd-more">
+                <div class="sd-tabs" id="sd-tabs" role="tablist">
+                    <button type="button" class="on" data-pane="ticks">실시간 체결</button>
+                    <button type="button" data-pane="invest">투자자별 매매</button>
+                    <button type="button" data-pane="info">종목 정보</button>
+                    <button type="button" data-pane="community">커뮤니티</button>
+                </div>
+
+                <div data-pane-box="ticks">
+                    <div class="sd-pane-sub">
+                        <span class="sd-live" id="tk-live"><i></i>실시간</span>
+                        <span>체결강도 <b id="sd-strength">—</b></span>
+                    </div>
+                    <div class="sd-scroll" id="sd-ticks"></div>
+                </div>
+                <div data-pane-box="invest" hidden>
+                    <div class="sd-pane-sub"><span>최근 10일 · 순매수(주)</span><span>+ 산 게 더 많음 / − 판 게 더 많음</span></div>
+                    <div class="sd-scroll" id="sd-invest"></div>
+                </div>
+                <div data-pane-box="info" hidden>
+                    <div id="sd-info"></div>
+                </div>
+                <div data-pane-box="community" hidden>
+                    <div class="sd-posts" id="sd-posts"></div>
+                    <form class="sd-post-form" id="sd-post-form">
+                        <textarea id="sd-post-input" maxlength="500" placeholder="<?= $loggedIn ? '이 종목 어때요? 의견을 남겨보세요' : '로그인하고 의견을 남겨보세요' ?>"></textarea>
+                        <button type="submit" class="sd-btn primary">등록</button>
+                    </form>
+                </div>
+            </section>
         </div>
+
+        <!-- ===================== 오른쪽 ===================== -->
+        <aside class="sd-side">
+            <!-- 호가 5단계 -->
+            <section class="sd-card sd-book">
+                <div class="sd-card-h">
+                    <span class="sd-card-t">호가</span>
+                    <span class="sd-live" id="ob-live"><i></i>실시간</span>
+                </div>
+                <div id="sd-book"></div>
+            </section>
+
+            <!-- 주문 (기능은 다음 단계 — 지금은 기존 주문 처리(trade_process.php)에 그대로 연결) -->
+            <section class="sd-card sd-order" id="order">
+                <div class="sd-card-h">
+                    <span class="sd-card-t">주문하기</span>
+                    <button type="button" class="sd-sheet-close" id="sd-sheet-close" aria-label="닫기">✕</button>
+                </div>
+                <?php if ($loggedIn): ?>
+                    <div class="cash"><span>주문 가능 금액</span><b><?= number_format($cash) ?>원</b></div>
+                    <form id="sd-order-form" action="trade_process.php" method="POST">
+                        <?= csrfField() ?>
+                        <input type="hidden" name="stock_code" value="<?= htmlspecialchars($stockCode) ?>">
+                        <input type="hidden" name="order_type" id="sd-order-type">
+                        <label class="label-t" for="sd-qty">수량</label>
+                        <input type="number" id="sd-qty" name="quantity" class="input-t" min="1" inputmode="numeric" placeholder="몇 주 살까요?">
+                        <div class="est"><span>예상 금액</span><b id="sd-est">0원</b></div>
+                        <div class="sd-order-btns">
+                            <button type="button" class="sd-btn sell" data-order="sell">판매</button>
+                            <button type="button" class="sd-btn buy" data-order="buy">구매</button>
+                        </div>
+                    </form>
+                <?php else: ?>
+                    <p class="hint">로그인하면 1,000만원 모의자금으로 사고팔 수 있어요.</p>
+                    <a href="login.php" class="sd-btn primary">로그인하고 거래하기</a>
+                <?php endif; ?>
+            </section>
+        </aside>
     </div>
 
-    <!-- 호가창 -->
-    <div class="grid-stack-item" gs-id="book" gs-w="4" gs-h="7" gs-min-w="3" gs-min-h="4">
-        <div class="grid-stack-item-content widget" data-w="book">
-            <div class="widget-h"><span class="wt">호가 <span class="live" id="ob-live"><span class="blip"></span>실시간</span></span><span class="drag-handle" title="끌어서 이동"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="4" r="1.4"/><circle cx="11" cy="4" r="1.4"/><circle cx="5" cy="8" r="1.4"/><circle cx="11" cy="8" r="1.4"/><circle cx="5" cy="12" r="1.4"/><circle cx="11" cy="12" r="1.4"/></svg></span></div>
-            <div id="orderbook"><div class="muted" style="font-size:13px;padding:20px 0;text-align:center;">불러오는 중…</div></div>
-        </div>
+    <!-- 휴대폰: 하단 고정 버튼 + 주문 시트 뒤 어두운 배경 -->
+    <div class="sd-bottombar">
+        <button type="button" class="sd-btn sell" data-open-order="sell">판매</button>
+        <button type="button" class="sd-btn buy" data-open-order="buy">구매</button>
     </div>
-
-    <!-- 체결내역 (시세) -->
-    <div class="grid-stack-item" gs-id="ticks" gs-w="4" gs-h="7" gs-min-w="3" gs-min-h="4">
-        <div class="grid-stack-item-content widget" data-w="ticks">
-            <div class="widget-h"><span class="wt">시세 · 체결 <span class="live" id="tk-live"><span class="blip"></span>실시간</span></span><span class="drag-handle" title="끌어서 이동"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="4" r="1.4"/><circle cx="11" cy="4" r="1.4"/><circle cx="5" cy="8" r="1.4"/><circle cx="11" cy="8" r="1.4"/><circle cx="5" cy="12" r="1.4"/><circle cx="11" cy="12" r="1.4"/></svg></span></div>
-            <div class="tick-scroll">
-                <table class="mini-tbl">
-                    <thead><tr><th>체결시각</th><th>체결가</th><th>체결량</th></tr></thead>
-                    <tbody id="tick-body"><tr><td colspan="3" class="muted" style="text-align:center;padding:16px;">불러오는 중…</td></tr></tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    <!-- 수급 (개인·외국인·기관) -->
-    <div class="grid-stack-item" gs-id="invest" gs-w="4" gs-h="6" gs-min-w="3" gs-min-h="3">
-        <div class="grid-stack-item-content widget" data-w="invest">
-            <div class="widget-h"><span class="wt">개인 · 외국인 · 기관 <span class="muted" style="font-size:11px;font-weight:600;">순매수(주)</span></span><span class="drag-handle" title="끌어서 이동"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="4" r="1.4"/><circle cx="11" cy="4" r="1.4"/><circle cx="5" cy="8" r="1.4"/><circle cx="11" cy="8" r="1.4"/><circle cx="5" cy="12" r="1.4"/><circle cx="11" cy="12" r="1.4"/></svg></span></div>
-            <div class="tick-scroll">
-                <table class="mini-tbl">
-                    <thead><tr><th>일자</th><th>개인</th><th>외국인</th><th>기관</th></tr></thead>
-                    <tbody id="inv-body"><tr><td colspan="4" class="muted" style="text-align:center;padding:16px;">불러오는 중…</td></tr></tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    <!-- 커뮤니티 -->
-    <div class="grid-stack-item" gs-id="community" gs-w="8" gs-h="5" gs-min-w="4" gs-min-h="4">
-        <div class="grid-stack-item-content widget" data-w="community">
-            <div class="widget-h"><span class="wt">커뮤니티</span><span class="drag-handle" title="끌어서 이동"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="4" r="1.4"/><circle cx="11" cy="4" r="1.4"/><circle cx="5" cy="8" r="1.4"/><circle cx="11" cy="8" r="1.4"/><circle cx="5" cy="12" r="1.4"/><circle cx="11" cy="12" r="1.4"/></svg></span></div>
-            <div id="post-list" class="post-list"><div class="post-empty">불러오는 중…</div></div>
-            <form id="post-form" class="post-form" onsubmit="submitPost(event)">
-                <textarea id="post-input" maxlength="500" placeholder="<?= $loggedIn ? '이 종목 어때요? 의견을 남겨보세요' : '로그인하고 의견을 남겨보세요' ?>"></textarea>
-                <button type="submit" class="btn-t btn-primary-t" style="padding:0 16px;font-size:14px;white-space:nowrap;">등록</button>
-            </form>
-        </div>
-    </div>
-</div>
-
-<!-- ===== 탭2: 종목정보 ===== -->
-<div id="pane-info" class="widget" style="display:none;">
-    <div class="info-grid" id="info-grid">
-        <div class="muted" style="padding:20px;">불러오는 중…</div>
-    </div>
+    <div class="sd-dim" id="sd-dim"></div>
+    <div class="sd-conn" id="sd-toast" hidden></div>
 </div>
 
 <script>
-    const stockCode = '<?= $stockCode ?>';
-    const loggedIn = <?= $loggedIn ? 'true' : 'false' ?>;
-    const CSRF = <?= json_encode(csrfToken()) ?>;   // AJAX POST에 함께 보낼 CSRF 토큰
-    let currentPrice = <?= (int) ($stock['price'] ?? 0) ?>;
-    let prevClose = <?= (int) (($stock['price'] ?? 0) - ($stock['change_price'] ?? 0)) ?>;
-    let quote = null;
-    let candleData = [];
-    let currentType = 'candle';
-    let series;
+(function () {
+    'use strict';
 
-    // ---------- 포맷 헬퍼 ----------
-    const won = n => Number(n).toLocaleString() + '원';
-    const qtyFmt = n => Number(n).toLocaleString();
-    function signClass(sign) { return (sign == 1 || sign == 2) ? 'up' : ((sign == 4 || sign == 5) ? 'down' : 'muted'); }
-    function priceClass(p) { return p > prevClose ? 'up' : (p < prevClose ? 'down' : 'muted'); }
-    function tradeValueFmt(v) {
-        v = Number(v);
-        const jo = Math.floor(v / 1e12);
-        const eok = Math.floor((v % 1e12) / 1e8);
-        if (jo > 0) return jo + '조 ' + eok.toLocaleString() + '억';
-        return eok.toLocaleString() + '억';
-    }
-    function timeFmt(hhmmss) {
-        const s = String(hhmmss).padStart(6, '0');
-        return s.slice(0,2) + ':' + s.slice(2,4) + ':' + s.slice(4,6);
-    }
-    function rangePct(v, lo, hi) { return hi > lo ? Math.max(0, Math.min(100, (v - lo) / (hi - lo) * 100)) : 50; }
+    // ================= 기본값 =================
+    const CODE     = <?= json_encode($stockCode) ?>;
+    const LOGGED   = <?= $loggedIn ? 'true' : 'false' ?>;
+    const CSRF     = <?= json_encode(csrfToken()) ?>;
+    let price      = <?= $price ?>;                 // 현재가
+    let prevClose  = <?= $price - $chg ?>;          // 전일 종가 (등락 색의 기준)
+    let quote      = null;                          // KIS 종합 시세
+    let book       = null;                          // 마지막 호가
+    let ticks      = [];                            // 체결 내역
 
-    function updateEstimate() {
-        const q = parseInt(document.getElementById('qty')?.value) || 0;
-        const est = document.getElementById('estimate');
-        if (est) est.textContent = (q * currentPrice).toLocaleString() + '원';
-    }
+    const $ = id => document.getElementById(id);
+    const css = getComputedStyle(document.documentElement);
+    const COLOR = {
+        up:   css.getPropertyValue('--up').trim()   || '#f04452',
+        down: css.getPropertyValue('--down').trim() || '#3182f6',
+        flat: css.getPropertyValue('--flat').trim() || '#8b95a1',
+        line: css.getPropertyValue('--line').trim() || '#e5e8eb',
+        sub:  css.getPropertyValue('--text-sub').trim() || '#8b95a1',
+    };
 
-    // ---------- 지표 스트립 ----------
-    function applyQuote(q) {
-        quote = q;
-        prevClose = q.prev_close || prevClose;
-        document.getElementById('m-day-lo').textContent = qtyFmt(q.low);
-        document.getElementById('m-day-hi').textContent = qtyFmt(q.high);
-        document.getElementById('m-day-dot').style.left = rangePct(currentPrice, q.low, q.high) + '%';
-        document.getElementById('m-52-lo').textContent = qtyFmt(q.w52_low);
-        document.getElementById('m-52-hi').textContent = qtyFmt(q.w52_high);
-        document.getElementById('m-52-dot').style.left = rangePct(currentPrice, q.w52_low, q.w52_high) + '%';
-        document.getElementById('m-trval').textContent = tradeValueFmt(q.trade_value);
-        renderInfo(q);
+    // ================= 숫자 표시 =================
+    const num  = n => Math.round(Number(n) || 0).toLocaleString('ko-KR');
+    const won  = n => num(n) + '원';
+    const sign = n => (n > 0 ? '+' : '');
+    const dir  = (p, base = prevClose) => !base || p === base ? 'flat' : (p > base ? 'up' : 'down');
+    const pct  = (p, base = prevClose) => base ? (p - base) / base * 100 : 0;
+    function volFmt(n) {                          // 12,345,678 → 1,234만 주
+        n = Number(n) || 0;
+        return n >= 1e4 ? num(Math.floor(n / 1e4)) + '만 주' : num(n) + '주';
     }
-    function refreshDayDot() {
-        if (!quote) return;
-        document.getElementById('m-day-dot').style.left = rangePct(currentPrice, quote.low, quote.high) + '%';
+    function moneyFmt(v) {                        // 원 → 조/억/만원
+        v = Number(v) || 0;
+        const jo = Math.floor(v / 1e12), eok = Math.floor((v % 1e12) / 1e8);
+        if (jo > 0) return jo + '조 ' + num(eok) + '억';
+        if (eok > 0) return num(eok) + '억';
+        return num(Math.floor(v / 1e4)) + '만원';
     }
-    function setStrength(v) {
-        if (!v) return;
-        document.getElementById('m-strength').textContent = Number(v).toFixed(1) + '%';
-    }
+    const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const hms = t => { const s = String(t).padStart(6, '0'); return s.slice(0, 2) + ':' + s.slice(2, 4) + ':' + s.slice(4, 6); };
 
-    // ---------- 종목정보 탭 ----------
-    function renderInfo(q) {
-        const rows = [
-            ['시장', q.market || '-'], ['업종', q.sector || '-'],
-            ['시가', won(q.open)], ['전일종가', won(q.prev_close)],
-            ['상한가', won(q.upper_limit)], ['하한가', won(q.lower_limit)],
-            ['52주 최고', won(q.w52_high)], ['52주 최저', won(q.w52_low)],
-            ['PER', q.per + '배'], ['PBR', q.pbr + '배'],
-            ['EPS', qtyFmt(q.eps) + '원'], ['BPS', qtyFmt(q.bps) + '원'],
-            ['시가총액', qtyFmt(q.market_cap) + '억'], ['상장주식수', qtyFmt(q.shares) + '주'],
-            ['외국인 소진율', q.frgn_ehrt + '%'], ['거래량', qtyFmt(q.volume) + '주'],
-        ];
-        document.getElementById('info-grid').innerHTML = rows.map(([k, v]) =>
-            `<div class="info-row"><span class="k">${k}</span><span class="v">${v}</span></div>`).join('');
+    // ================= 상태 화면 (빈 화면 · 오류) =================
+    // retry 에 이름을 주면 [다시 시도] 버튼이 생기고, 누르면 RETRY[이름]() 이 실행된다.
+    function stateInner(kind, title, desc, retry, label = '다시 시도') {
+        return `<div class="ico">${kind === 'error' ? '⚠️' : '📭'}</div><div class="tt">${title}</div>`
+             + (desc ? `<div class="ds">${desc}</div>` : '')
+             + (retry ? `<button type="button" class="sd-retry" data-retry="${retry}">${label}</button>` : '');
+    }
+    const stateHTML = (kind, title, desc, retry) => `<div class="sd-state inline">${stateInner(kind, title, desc, retry)}</div>`;
+    const RETRY = {};
+    document.addEventListener('click', e => {
+        const b = e.target.closest('[data-retry]');
+        if (b && RETRY[b.dataset.retry]) RETRY[b.dataset.retry]();
+    });
+
+    // fetch + JSON. 서버 오류·{error:...} 응답을 모두 '실패'로 통일
+    async function getJSON(url) {
+        const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        if (data && !Array.isArray(data) && data.error) throw new Error(data.error);
+        return data;
     }
 
-    // ---------- 호가창 ----------
-    // 토스처럼 판매대기(매도)는 왼쪽, 가격은 가운데, 구매대기(매수)는 오른쪽 — 좌우로 바로 비교되게.
-    function renderOrderbook(d) {
-        if (!d || d.error || !d.asks) return;
-        const all = d.asks.concat(d.bids).map(x => x.qty);
-        const maxQty = Math.max(1, ...all);
-        let html = '<div class="ob-head"><span>판매대기</span><span>가격</span><span>구매대기</span></div>';
-        // 매도호가: askp10(높은가) → askp1(최우선). 위에서 아래로.
-        for (let i = 9; i >= 0; i--) {
-            const a = d.asks[i];
-            const w = (a.qty / maxQty * 100).toFixed(0);
-            html += `<div class="ob-row ob-ask">`
-                 +  `<div class="ob-side ob-ask-side"><span class="bar" style="width:${w}%"></span><span class="num">${qtyFmt(a.qty)}</span></div>`
-                 +  `<div class="ob-price">${qtyFmt(a.price)}</div>`
-                 +  `<div class="ob-side ob-bid-side"></div></div>`;
+    // 잠깐 떴다 사라지는 안내
+    let toastT = null;
+    function toast(msg, ms = 2200) {
+        const el = $('sd-toast');
+        el.textContent = msg; el.hidden = false;
+        clearTimeout(toastT);
+        if (ms) toastT = setTimeout(() => { el.hidden = true; }, ms);
+    }
+    function flash(el, d) {
+        if (!el || d === 'flat') return;
+        el.classList.remove('sd-flash-up', 'sd-flash-down');
+        void el.offsetWidth;                         // 애니메이션을 처음부터 다시 재생시키는 요령
+        el.classList.add(d === 'up' ? 'sd-flash-up' : 'sd-flash-down');
+    }
+    function markLive(id) {
+        const el = $(id); if (!el) return;
+        el.classList.add('on'); clearTimeout(el._t);
+        el._t = setTimeout(() => el.classList.remove('on'), 4000);
+    }
+
+    // ================= 현재가 갱신 (모든 곳이 이 함수 하나로) =================
+    function setPrice(p, opts = {}) {
+        p = Number(p) || 0;
+        if (!p) return;
+        const old = price;
+        price = p;
+        $('sd-price').textContent = won(p);
+        const ch = p - prevClose, d = dir(p);
+        const el = $('sd-change');
+        el.textContent = `${sign(ch)}${num(ch)}원 (${sign(ch)}${pct(p).toFixed(2)}%)`;
+        el.className = d;
+        if (opts.flash && old && old !== p) flash($('sd-price'), p > old ? 'up' : 'down');
+
+        // 고가·저가가 장중에 바뀌면 요약 카드도 따라간다
+        if (quote) {
+            if (p > quote.high) quote.high = p;
+            if (quote.low && p < quote.low) quote.low = p;
+            renderStats();
         }
-        html += `<div class="ob-mid ${priceClass(currentPrice)}">${qtyFmt(currentPrice)}</div>`;
-        // 매수호가: bidp1(최우선) → bidp10.
-        for (let i = 0; i < 10; i++) {
-            const b = d.bids[i];
-            const w = (b.qty / maxQty * 100).toFixed(0);
-            html += `<div class="ob-row ob-bid">`
-                 +  `<div class="ob-side ob-ask-side"></div>`
-                 +  `<div class="ob-price">${qtyFmt(b.price)}</div>`
-                 +  `<div class="ob-side ob-bid-side"><span class="bar" style="width:${w}%"></span><span class="num">${qtyFmt(b.qty)}</span></div></div>`;
+        updateEstimate();
+        if (book) renderBook(book);                  // '지금 가격' 줄 강조 위치 갱신
+    }
+
+    // ================= 요약 카드 =================
+    function renderStats() {
+        const q = quote;
+        const put = (id, html, cls = '') => { const el = $(id); el.innerHTML = html; el.className = 'v ' + cls; };
+        if (!q) return;
+        put('st-open', num(q.open), dir(q.open));
+        put('st-high', num(q.high), dir(q.high));
+        put('st-low',  num(q.low),  dir(q.low));
+        put('st-vol',  volFmt(q.volume));
+        put('st-tv',   moneyFmt(q.trade_value));
+    }
+    function statsError() {
+        ['st-open', 'st-high', 'st-low', 'st-vol', 'st-tv'].forEach(id => { $(id).textContent = '—'; $(id).className = 'v flat'; });
+        let el = $('sd-stats-err');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'sd-stats-err'; el.className = 'sd-stats-err';
+            $('sd-stats').appendChild(el);
         }
-        html += `<div class="ob-total"><span>매도잔량 <b>${qtyFmt(d.total_ask)}</b></span><span>매수잔량 <b>${qtyFmt(d.total_bid)}</b></span></div>`;
-        document.getElementById('orderbook').innerHTML = html;
+        el.innerHTML = '요약 정보를 불러오지 못했어요. <button type="button" class="sd-retry" data-retry="quote">다시 시도</button>';
     }
 
-    // ---------- 체결내역 ----------
-    let ticks = [];
-    function renderTicks() {
-        if (!ticks.length) return;
-        document.getElementById('tick-body').innerHTML = ticks.slice(0, 30).map(t =>
-            `<tr><td>${timeFmt(t.time)}</td><td class="${signClass(t.sign)}">${qtyFmt(t.price)}</td><td>${qtyFmt(t.volume)}</td></tr>`).join('');
+    async function loadQuote() {
+        const err = $('sd-stats-err'); if (err) err.remove();
+        try {
+            const q = await getJSON('get_quote.php?code=' + CODE);
+            quote = q;
+            if (q.prev_close) prevClose = q.prev_close;
+            renderStats();
+            setPrice(q.price || price);
+            renderInfo();
+        } catch (e) {
+            console.warn('시세 로드 실패', e);
+            statsError();
+            if (activePane === 'info') renderInfo(true);
+        }
     }
-    function pushTick(t) { ticks.unshift(t); if (ticks.length > 60) ticks.pop(); renderTicks(); }
+    RETRY.quote = loadQuote;
 
-    // ---------- 수급 ----------
-    function renderInvestor(rows) {
-        if (!Array.isArray(rows) || !rows.length) {
-            document.getElementById('inv-body').innerHTML = '<tr><td colspan="4" class="muted" style="text-align:center;padding:16px;">데이터 없음</td></tr>';
+    // ================= 호가 5단계 =================
+    const LEVELS = 5;
+    function bookSkeleton() {
+        $('sd-book').innerHTML = Array.from({ length: LEVELS * 2 }, () => '<span class="sd-skel sd-ob-skel"></span>').join('');
+    }
+    function renderBook(d) {
+        book = d;
+        const asks = (d.asks || []).slice(0, LEVELS);    // [0] = 가장 싼 매도호가
+        const bids = (d.bids || []).slice(0, LEVELS);    // [0] = 가장 비싼 매수호가
+        const rows = asks.concat(bids);
+        if (!rows.length || rows.every(r => !r.price)) {
+            $('sd-book').innerHTML = stateHTML('empty', '호가가 아직 없어요', '장 시작 전이거나 거래가 멈춘 종목이에요.');
             return;
         }
-        const sc = v => v > 0 ? 'up' : (v < 0 ? 'down' : 'muted');
-        const sg = v => (v > 0 ? '+' : '') + qtyFmt(v);
-        document.getElementById('inv-body').innerHTML = rows.slice(0, 10).map(r => {
-            const d = String(r.date).slice(4, 6) + '.' + String(r.date).slice(6, 8);
-            return `<tr><td>${d}</td>`
-                 + `<td class="${sc(r.individual)}">${sg(r.individual)}</td>`
-                 + `<td class="${sc(r.foreign)}">${sg(r.foreign)}</td>`
-                 + `<td class="${sc(r.institution)}">${sg(r.institution)}</td></tr>`;
-        }).join('');
+        const maxQty = Math.max(1, ...rows.map(r => r.qty || 0));
+        const row = (r, side) => {
+            if (!r || !r.price) return `<div class="sd-ob-row sd-ob-${side}"><div class="sd-ob-qty"></div><div class="sd-ob-px"><b class="flat">—</b></div><div class="sd-ob-qty"></div></div>`;
+            const w = ((r.qty || 0) / maxQty * 100).toFixed(1);
+            const qty = `<div class="sd-ob-qty"><span class="bar" style="width:${w}%"></span><span class="n">${num(r.qty)}</span></div>`;
+            const d2 = dir(r.price), p = pct(r.price);
+            const px = `<div class="sd-ob-px ${d2}"><b>${num(r.price)}</b><small>${sign(p)}${p.toFixed(2)}%</small></div>`;
+            const now = r.price === price ? ' is-now' : '';
+            return side === 'ask'
+                ? `<div class="sd-ob-row sd-ob-ask${now}">${qty}${px}<div class="sd-ob-qty"></div></div>`
+                : `<div class="sd-ob-row sd-ob-bid${now}"><div class="sd-ob-qty"></div>${px}${qty}</div>`;
+        };
+        let html = '<div class="sd-ob-head"><span>판매 대기</span><span>가격</span><span>구매 대기</span></div>';
+        for (let i = LEVELS - 1; i >= 0; i--) html += row(asks[i], 'ask');   // 위: 비싼 매도 → 싼 매도
+        for (let i = 0; i < LEVELS; i++)      html += row(bids[i], 'bid');   // 아래: 비싼 매수 → 싼 매수
+        const sum = a => a.reduce((s, r) => s + (r.qty || 0), 0);
+        html += `<div class="sd-ob-sum"><span>${num(sum(asks))}</span><span>5호가 잔량</span><span>${num(sum(bids))}</span></div>`;
+        $('sd-book').innerHTML = html;
+    }
+    async function loadBook() {
+        if (!book) bookSkeleton();
+        try {
+            const d = await getJSON('get_orderbook.php?code=' + CODE);
+            if (d.prev_close) prevClose = d.prev_close;
+            renderBook(d);
+        } catch (e) {
+            console.warn('호가 로드 실패', e);
+            if (!book) $('sd-book').innerHTML = stateHTML('error', '호가를 불러오지 못했어요', '잠시 후 다시 시도해 주세요.', 'book');
+        }
+    }
+    RETRY.book = loadBook;
+
+    // ================= 차트 =================
+    const RANGE_RES  = { '1D': '1분봉', '1W': '5분봉', '1M': '일봉', '3M': '일봉', '1Y': '일봉', '2Y': '일봉' };
+    const DAILY      = ['1M', '3M', '1Y', '2Y'];      // 서버가 time 을 'YYYY-MM-DD' 로 주는 기간 (func.php chartRangeSpec 과 맞출 것)
+    const BUCKET_SEC = { '1D': 60, '1W': 300 };        // 실시간으로 마지막 봉을 갱신하는 기간과 봉 폭(초)
+    let range = '1D', chartType = null, userPickedType = false;
+    let candles = [], series = null, prevLine = null, chart = null, loadSeq = 0;
+
+    function chartState(kind, title, desc, retry, label) {
+        const el = $('sd-chart-state');
+        if (!kind) { el.hidden = true; el.innerHTML = ''; return; }
+        el.innerHTML = stateInner(kind, title, desc, retry, label);
+        el.hidden = false;
     }
 
-    // ---------- 탭 전환 ----------
-    function switchTab(t) {
-        const isChart = t === 'chart';
-        document.getElementById('pane-chart').style.display = isChart ? '' : 'none';
-        document.getElementById('pane-info').style.display = isChart ? 'none' : 'block';
-        document.getElementById('dv-tools').style.display = isChart ? 'flex' : 'none';
-        document.getElementById('tab-chart').className = isChart ? 'on' : '';
-        document.getElementById('tab-info').className = isChart ? '' : 'on';
-        if (isChart) resizeChart();
+    function initChart() {
+        if (!window.LightweightCharts) return false;
+        chart = LightweightCharts.createChart($('sd-chart'), {
+            autoSize: true,
+            layout: { background: { color: 'transparent' }, textColor: COLOR.sub, fontFamily: 'Pretendard', fontSize: 12 },
+            grid: { vertLines: { visible: false }, horzLines: { color: '#f2f4f6' } },
+            rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.12, bottom: 0.08 } },
+            // fixLeftEdge/fixRightEdge 는 짝으로 켠다 → 최대로 줄여도 데이터 밖 빈 여백이 생기지 않는다
+            timeScale: { borderVisible: false, fixLeftEdge: true, fixRightEdge: true, rightOffset: 0, lockVisibleTimeRangeOnResize: true },
+            crosshair: { mode: 1, vertLine: { color: '#c9d2dc', labelBackgroundColor: '#4e5968' }, horzLine: { color: '#c9d2dc', labelBackgroundColor: '#4e5968' } },
+            localization: {
+                locale: 'ko-KR',
+                priceFormatter: p => num(p),
+                // 분봉 time 은 'KST 시각을 UTC로 읽은 값'이라 getUTC* 로 읽어야 한국 시각이 나온다
+                timeFormatter: t => {
+                    if (typeof t === 'object') return `${t.year}.${String(t.month).padStart(2, '0')}.${String(t.day).padStart(2, '0')}`;
+                    if (typeof t === 'string') return t.replace(/-/g, '.');
+                    const d = new Date(t * 1000);
+                    return `${d.getUTCMonth() + 1}/${d.getUTCDate()} ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+                },
+            },
+        });
+        return true;
     }
-    function resizeChart() {
-        // autoSize가 폭/높이를 자동으로 맞추므로 캔들 범위만 다시 채워줌
+
+    // 선 차트 색: 기준(1일=어제 종가, 나머지=기간 첫 값)보다 오르면 빨강, 내리면 파랑
+    function lineColor() {
+        if (!candles.length) return COLOR.flat;
+        const base = range === '1D' && prevClose ? prevClose : candles[0].close;
+        const d = dir(candles[candles.length - 1].close, base);
+        return COLOR[d];
+    }
+    function hexToRgba(hex, a) {
+        const m = hex.replace('#', '').match(/.{2}/g);
+        return m ? `rgba(${parseInt(m[0], 16)},${parseInt(m[1], 16)},${parseInt(m[2], 16)},${a})` : hex;
+    }
+
+    function drawSeries() {
+        if (!chart) return;
+        if (series) { chart.removeSeries(series); series = null; prevLine = null; }
+        if (chartType === 'candle') {
+            series = chart.addCandlestickSeries({
+                upColor: COLOR.up, downColor: COLOR.down, borderVisible: false,
+                wickUpColor: COLOR.up, wickDownColor: COLOR.down, priceLineVisible: false,
+            });
+            series.setData(candles);
+        } else {
+            const c = lineColor();
+            series = chart.addAreaSeries({
+                lineColor: c, lineWidth: 2, topColor: hexToRgba(c, 0.16), bottomColor: hexToRgba(c, 0),
+                priceLineVisible: false, crosshairMarkerRadius: 4,
+            });
+            series.setData(candles.map(k => ({ time: k.time, value: k.close })));
+        }
+        // 1일 차트에는 '어제 종가' 점선 → 지금 오른 건지 내린 건지 한눈에
+        if (range === '1D' && prevClose) {
+            prevLine = series.createPriceLine({ price: prevClose, color: '#b0b8c1', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '어제' });
+        }
         chart.timeScale().fitContent();
     }
 
-    // ---------- 위젯 대시보드 (gridstack: 이동 + 칸단위 리사이즈) ----------
-    // ⚠️ 일부러 배치를 저장하지 않는다. 페이지 안에서 끌어서 옮기고 크기를 바꾸는 건 자유지만,
-    //    새로고침하거나 다른 종목으로 이동하면 항상 HTML의 gs-w/gs-h 기본값으로 시작해야 한다.
-    //    (예전엔 localStorage에 저장해서 종목을 옮겨도 남아있었는데, 다른 종목엔 어울리지 않는
-    //     배치가 그대로 적용돼 위젯이 겹치거나 어긋나 보이는 문제가 있었다.)
-    try { localStorage.removeItem('moa_widget_layout_v1'); } catch (e) {}   // 예전 버전이 저장해둔 값 정리
-
-    const grid = GridStack.init({
-        column: 12,
-        cellHeight: 58,
-        margin: 10,
-        float: false,
-        handle: '.drag-handle',                     // 이 핸들로만 이동
-        resizable: { handles: 'e, se, s' },         // 오른쪽·하단·모서리로 크기조절
-        columnOpts: { breakpointForWindow: true, breakpoints: [{ w: 768, c: 1 }] },  // 좁으면 1열
-    }, document.getElementById('pane-chart'));
-
-    grid.on('resizestop', resizeChart);
-
-    // #order 로 들어온 경우(자동매매 화면의 '일반매매' 버튼) 주문 패널로 스크롤 + 잠깐 강조.
-    // gridstack이 위젯을 absolute 로 재배치하므로 브라우저 기본 해시 점프는 엉뚱한 곳으로 간다
-    // → 배치가 끝난 뒤 직접 스크롤한다.
-    if (location.hash === '#order') {
-        requestAnimationFrame(() => {
-            const panel = document.getElementById('order');
-            if (!panel) return;
-            panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            panel.classList.add('w-highlight');
-            setTimeout(() => panel.classList.remove('w-highlight'), 1600);
-        });
+    function setTypeButtons() {
+        document.querySelectorAll('#sd-type button').forEach(b => b.classList.toggle('on', b.dataset.type === chartType));
     }
 
-    function resetLayout() {          // 기본 배치로 초기화 (새로고침이면 어차피 기본값이지만, 버튼으로도 즉시 되게)
-        location.reload();
-    }
-
-    // ---------- 차트 ----------
-    const chart = LightweightCharts.createChart(document.getElementById('chart-container'), {
-        layout: { background: { color: 'transparent' }, textColor: '#8b95a1', fontFamily: 'Pretendard' },
-        grid: { vertLines: { color: '#f2f4f6' }, horzLines: { color: '#f2f4f6' } },
-        rightPriceScale: { borderColor: '#e5e8eb' },
-        // 시간축. fixLeftEdge/fixRightEdge 가 이 위젯의 '경계 잠금'이다.
-        //   끄면(기본값) 축소·드래그로 데이터 바깥까지 끝없이 끌려나가서 화면 절반이 빈 여백이 된다.
-        //   켜면 첫 봉 왼쪽 / 마지막 봉 오른쪽으로는 못 넘어가므로,
-        //   '최대한 축소 = 가진 데이터가 화면에 딱 차는 상태'가 되어 여백이 생기지 않는다.
-        // rightOffset:0 은 마지막 봉을 오른쪽 끝에 붙인다(기본 여백 제거).
-        timeScale: {
-            borderColor: '#e5e8eb',
-            timeVisible: true,
-            secondsVisible: false,
-            fixLeftEdge: true,
-            fixRightEdge: true,
-            rightOffset: 0,
-            // ⚠️ minBarSpacing 은 일부러 안 준다.
-            //    라이브러리 내부(ec())를 보면 fixLeftEdge와 fixRightEdge가 '둘 다' true일 때
-            //    봉 최소폭을 (차트폭 ÷ 봉개수)로 잡고 minBarSpacing 은 아예 쓰지 않는다.
-            //    → 최대 축소 지점이 정확히 '전체 데이터가 화면에 딱 차는 상태'가 된다. 이게 우리가 원한 동작.
-            //    둘 중 하나라도 끄면 그 순간 minBarSpacing(기본 0.5)이 살아나 다시 여백이 생긴다. 짝으로 유지할 것.
-            lockVisibleTimeRangeOnResize: true,   // 창 크기를 바꿔도 보고 있던 구간을 유지
-        },
-        crosshair: { mode: 0 },
-        autoSize: true,   // 컨테이너 크기를 자동 감지 → 창 리사이즈에 매끄럽게 대응
-    });
-    function createCandleSeries() {
-        return chart.addCandlestickSeries({ upColor: '#f04452', downColor: '#3182f6', borderVisible: false, wickUpColor: '#f04452', wickDownColor: '#3182f6' });
-    }
-    function createLineSeries() { return chart.addLineSeries({ color: '#3182f6', lineWidth: 2 }); }
-    series = createCandleSeries();
-
-    // ---------- 기간(range) 전환 ----------
-    // 서버가 기간별로 해상도를 바꿔 준다. 프론트는 '지금 어떤 해상도인지'만 알면 된다.
-    //   · 분/시간 단위 → time 이 숫자(유닉스 초). 시:분 라벨을 보여준다.
-    //   · 일 단위      → time 이 'YYYY-MM-DD' 문자열. lightweight-charts가 business day로 알아듣고
-    //                    주말·휴장일을 알아서 건너뛰어 그린다. 시:분 라벨은 끈다.
-    const RANGE_LABEL = { '1D': '1분봉', '1W': '5분봉', '1M': '일봉', '3M': '일봉', '1Y': '일봉', '2Y': '일봉', '5Y': '일봉' };
-    let currentRange = '1D';
-    let loadSeq = 0;                  // 빠르게 연타했을 때 늦게 온 응답이 최신 화면을 덮지 않도록
-
-    async function loadChart(range = currentRange) {
+    async function loadChart(r = range) {
         const seq = ++loadSeq;
-        const box = document.getElementById('chart-ranges');
-        if (box) box.classList.add('loading');
+        const wrap = $('sd-chart-wrap');
+        if (candles.length) wrap.classList.add('is-busy'); else $('sd-chart-skel').hidden = false;
+        chartState(null);
         try {
-            const res = await fetch('get_stock_chart.php?stock_code=' + stockCode + '&range=' + range);
-            const data = await res.json();
-            if (seq !== loadSeq) return;             // 그 사이 다른 기간을 눌렀다 → 이 응답은 버린다
-            candleData = Array.isArray(data) ? data : [];
-            currentRange = range;
-
-            // 일봉이면 시:분 축을 끈다 (안 끄면 전부 00:00으로 찍힌다)
-            chart.applyOptions({ timeScale: { timeVisible: !isDailyRange(), secondsVisible: false } });
-
-            // 1일·1주는 KIS 모의투자 실시간 체결이 몇 분에 한 번씩만 들어와서(장중에도 그렇다)
-            // 1분봉 안에 값이 하나뿐인 경우가 많다 → 캔들 몸통이 안 보이고 납작한 선으로만 찍힌다.
-            // 그래서 이 두 구간은 라인차트로 시작한다(점과 점을 이어 그리므로 뚝뚝 끊겨도 자연스럽다).
-            // 일봉 구간(데이터가 실제 거래소 값이라 충분함)은 기존처럼 캔들로 시작.
-            // 버튼(캔들/라인)으로 언제든 수동 전환 가능 — 그 선택은 다음 기간 전환 전까지 유지된다.
-            const wantType = (range === '1D' || range === '1W') ? 'line' : 'candle';
-            if (wantType !== currentType) switchChartType(wantType);
-            else renderChart();
-
-            chart.timeScale().fitContent();
-
-            const note = document.getElementById('chart-note');
-            if (note) note.textContent = candleData.length
-                ? `${RANGE_LABEL[range] || ''} · ${candleData.length}개`
-                : '데이터 없음';
+            const data = await getJSON('get_stock_chart.php?stock_code=' + CODE + '&range=' + r);
+            if (seq !== loadSeq) return;           // 그 사이 다른 기간을 눌렀다 → 늦게 온 응답은 버린다
+            range = r;
+            candles = Array.isArray(data) ? data : [];
+            // 사용자가 직접 고른 적이 없을 때만 자동 선택: 1일·1주는 선(체결이 드문드문이라 캔들이 납작함), 나머지는 캔들
+            if (!userPickedType) chartType = (r === '1D' || r === '1W') ? 'line' : 'candle';
+            setTypeButtons();
+            chart.applyOptions({ timeScale: { timeVisible: !DAILY.includes(r), secondsVisible: false } });
+            drawSeries();
+            if (!candles.length && r === '1D') {
+                // '1일' = 오늘 하루. 주말·공휴일·장 시작 전엔 비어 있는 게 정상 → 1주 차트로 바로 넘어갈 수 있게
+                chartState('empty', '오늘은 아직 거래가 없어요', '주말·공휴일이거나 장 시작(오전 9시) 전이에요.', 'week', '1주 차트 보기');
+                $('sd-chart-note').textContent = '';
+            } else if (!candles.length) {
+                chartState('empty', '이 기간엔 거래 기록이 없어요', '다른 기간을 눌러 보세요.');
+                $('sd-chart-note').textContent = '';
+            } else {
+                $('sd-chart-note').textContent = `${RANGE_RES[r]} · ${candles.length.toLocaleString()}개`;
+            }
         } catch (e) {
+            if (seq !== loadSeq) return;
             console.warn('차트 로드 실패', e);
+            chartState('error', '차트를 불러오지 못했어요', '네트워크가 불안정하거나 서버가 잠시 바빠요.', 'chart');
         } finally {
-            if (box) box.classList.remove('loading');
+            if (seq === loadSeq) { wrap.classList.remove('is-busy'); $('sd-chart-skel').hidden = true; }
         }
     }
+    RETRY.chart = () => loadChart(range);
+    RETRY.week  = () => document.querySelector('#sd-ranges [data-range="1W"]').click();
 
-    // 일봉 구간 = 서버가 time 을 'YYYY-MM-DD' 문자열로 주는 구간.
-    // ⚠️ 여기에 빠뜨리면 시:분 축이 켜진 채라 모든 봉이 00:00으로 찍힌다. 규격표(chartRangeSpec)와 항상 같이 고칠 것.
-    function isDailyRange() { return ['1M', '3M', '1Y', '2Y', '5Y'].includes(currentRange); }
-
-    document.getElementById('chart-ranges').addEventListener('click', (e) => {
-        const btn = e.target.closest('button[data-range]');
-        if (!btn || btn.classList.contains('on')) return;
-        document.querySelectorAll('#chart-ranges button').forEach(b => b.classList.toggle('on', b === btn));
-        loadChart(btn.dataset.range);
+    $('sd-ranges').addEventListener('click', e => {
+        const b = e.target.closest('button[data-range]');
+        if (!b || b.classList.contains('on')) return;
+        document.querySelectorAll('#sd-ranges button').forEach(x => x.classList.toggle('on', x === b));
+        loadChart(b.dataset.range);
+    });
+    $('sd-type').addEventListener('click', e => {
+        const b = e.target.closest('button[data-type]');
+        if (!b || b.dataset.type === chartType) return;
+        chartType = b.dataset.type;
+        userPickedType = true;                     // 이제부터 기간을 바꿔도 이 선택을 유지
+        setTypeButtons();
+        drawSeries();
     });
 
-    function renderChart() {
-        if (currentType === 'candle') series.setData(candleData);
-        else series.setData(candleData.map(c => ({ time: c.time, value: c.close })));
-    }
-    function switchChartType(type) {
-        if (type === currentType) return;
-        currentType = type;
-        chart.removeSeries(series);
-        series = (type === 'candle') ? createCandleSeries() : createLineSeries();
-        renderChart();
-        document.getElementById('btn-candle').className = type === 'candle' ? 'on' : '';
-        document.getElementById('btn-line').className = type === 'line' ? 'on' : '';
-    }
-    // (차트 폭은 autoSize가 자동 처리 → 별도 resize 핸들러 불필요)
+    // 실시간 체결 → 마지막 봉 갱신 (1일·1주만. 일봉 기간은 과거 차트라 건드리지 않음)
+    // 체결시각(HHMMSS, 한국시각)을 서버 캔들과 같은 'KST를 UTC로 읽은' 축으로 바꾼다.
+    function updateLastCandle(p, hhmmss) {
+        const bucket = BUCKET_SEC[range];
+        if (!bucket || !series || !hhmmss) return;
+        const s = String(hhmmss).padStart(6, '0');
+        const sec = (+s.slice(0, 2)) * 3600 + (+s.slice(2, 4)) * 60 + (+s.slice(4, 6));
+        const todayKst = Math.floor((Date.now() / 1000 + 9 * 3600) / 86400) * 86400;
+        const slot = Math.floor((todayKst + sec) / bucket) * bucket;
 
-    // ---------- 관심종목 토글 ----------
-    document.getElementById('fav-btn').addEventListener('click', async function () {
-        if (!loggedIn) { location.href = 'login.php'; return; }
-        const isFav = this.dataset.fav === '1';
-        const url = isFav ? 'watchlist_remove.php' : 'watchlist_add.php';
-        await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': CSRF },
-            body: 'stock_code=' + encodeURIComponent(stockCode) + '&csrf_token=' + encodeURIComponent(CSRF)
-        });
-        this.dataset.fav = isFav ? '0' : '1';
-        this.textContent = isFav ? '♡ 관심등록' : '♥ 관심종목';
-        this.className = 'btn-t ' + (isFav ? 'btn-primary-t' : 'btn-ghost-t');
-        this.style.cssText = 'padding:9px 16px;font-size:14px;white-space:nowrap;';
+        const last = candles[candles.length - 1];
+        if (last && last.time === slot) {
+            last.high = Math.max(last.high, p); last.low = Math.min(last.low, p); last.close = p;
+        } else if (!last || slot > last.time) {
+            candles.push({ time: slot, open: p, high: p, low: p, close: p });
+            if (candles.length === 1) chartState(null);
+        } else return;                              // 이미 지나간 칸의 늦은 체결 → 무시
+        const k = candles[candles.length - 1];
+        series.update(chartType === 'candle' ? k : { time: k.time, value: k.close });
+    }
+
+    // ================= 아래 상세 탭 =================
+    let activePane = 'ticks';
+    const loaded = {};
+    $('sd-tabs').addEventListener('click', e => {
+        const b = e.target.closest('button[data-pane]');
+        if (b) openPane(b.dataset.pane);
     });
-
-    // ---------- 주문 ----------
-    function submitOrder(type) {
-        const form = document.getElementById('trade-form-detail');
-        const qty = parseInt(document.getElementById('qty').value);
-        if (!qty || qty < 1) { alert('수량을 입력해주세요.'); return; }
-        document.getElementById('order-type-field').value = type;
-        form.querySelectorAll('button').forEach(b => b.disabled = true);
-        form.submit();
+    function openPane(name) {
+        activePane = name;
+        document.querySelectorAll('#sd-tabs button').forEach(b => b.classList.toggle('on', b.dataset.pane === name));
+        document.querySelectorAll('[data-pane-box]').forEach(p => { p.hidden = p.dataset.paneBox !== name; });
+        if (!loaded[name]) { loaded[name] = true; PANE_LOAD[name](); }   // 처음 열 때만 불러온다 (API 호출 절약)
     }
+    const skelRows = n => Array.from({ length: n }, () => '<span class="sd-skel" style="height:20px;margin:12px 0;"></span>').join('');
 
-    // ---------- 초기 REST 로드 (장 마감/실시간 끊겨도 항상 보이게) ----------
-    async function loadInitial() {
+    // --- 체결 ---
+    function renderTicks() {
+        const box = $('sd-ticks');
+        if (!ticks.length) { box.innerHTML = stateHTML('empty', '아직 체결이 없어요', '거래가 생기면 여기에 바로 보여요.'); return; }
+        box.innerHTML = '<table class="sd-tbl"><thead><tr><th>시각</th><th>체결가</th><th>등락률</th><th>체결량</th></tr></thead><tbody>'
+            + ticks.slice(0, 30).map(t => {
+                const d = dir(t.price), p = pct(t.price);
+                return `<tr><td>${hms(t.time)}</td><td class="${d}">${num(t.price)}</td><td class="${d}">${sign(p)}${p.toFixed(2)}%</td><td>${num(t.volume)}</td></tr>`;
+            }).join('') + '</tbody></table>';
+    }
+    async function loadTicks() {
+        $('sd-ticks').innerHTML = skelRows(6);
         try {
-            const [q, ob, cc, inv] = await Promise.all([
-                fetch('get_quote.php?code=' + stockCode).then(r => r.json()),
-                fetch('get_orderbook.php?code=' + stockCode).then(r => r.json()),
-                fetch('get_ccnl.php?code=' + stockCode).then(r => r.json()),
-                fetch('get_investor.php?code=' + stockCode).then(r => r.json()),
-            ]);
-            if (q && !q.error) {
-                currentPrice = q.price || currentPrice;
-                applyQuote(q);
-                // 헤더 가격도 최신값으로
-                document.getElementById('detail-price').textContent = won(currentPrice);
-                const ch = document.getElementById('detail-change');
-                ch.textContent = `어제보다 ${q.change_price > 0 ? '+' : ''}${qtyFmt(q.change_price)}원 (${q.change_rate}%)`;
-                ch.className = 'rt ' + priceClass(currentPrice);
-                updateEstimate();
-            }
-            renderOrderbook(ob);
-            if (cc && cc.trades) { ticks = cc.trades; renderTicks(); setStrength(cc.strength); }
-            renderInvestor(inv);
-        } catch (e) { console.warn('초기 로드 실패', e); }
+            const d = await getJSON('get_ccnl.php?code=' + CODE);
+            ticks = ticks.filter(t => t.live).concat(d.trades || []);   // 그새 실시간으로 받은 최신 체결이 맨 위
+            setStrength(d.strength);
+            renderTicks();
+        } catch (e) {
+            console.warn('체결 로드 실패', e);
+            $('sd-ticks').innerHTML = stateHTML('error', '체결 내역을 불러오지 못했어요', '', 'ticks');
+        }
+    }
+    function setStrength(v) { if (v) $('sd-strength').textContent = Number(v).toFixed(1) + '%'; }
+
+    // --- 투자자 ---
+    async function loadInvest() {
+        const box = $('sd-invest');
+        box.innerHTML = skelRows(6);
+        try {
+            const rows = await getJSON('get_investor.php?code=' + CODE);
+            if (!Array.isArray(rows) || !rows.length) { box.innerHTML = stateHTML('empty', '투자자 정보가 없어요', ''); return; }
+            const cell = v => `<td class="${v > 0 ? 'up' : (v < 0 ? 'down' : 'flat')}">${sign(v)}${num(v)}</td>`;
+            box.innerHTML = '<table class="sd-tbl"><thead><tr><th>날짜</th><th>개인</th><th>외국인</th><th>기관</th></tr></thead><tbody>'
+                + rows.slice(0, 10).map(r => {
+                    const s = String(r.date);
+                    return `<tr><td>${s.slice(4, 6)}.${s.slice(6, 8)}</td>${cell(r.individual)}${cell(r.foreign)}${cell(r.institution)}</tr>`;
+                }).join('') + '</tbody></table>';
+        } catch (e) {
+            console.warn('투자자 로드 실패', e);
+            box.innerHTML = stateHTML('error', '투자자 정보를 불러오지 못했어요', '', 'invest');
+        }
     }
 
-    // ---------- 실시간 WS ----------
-    function markLive(id) {
-        const el = document.getElementById(id);
-        if (el) { el.classList.add('on'); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('on'), 4000); }
-    }
-    const detailSocket = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/');
-    detailSocket.onopen = () => detailSocket.send(JSON.stringify({ action: 'watch', code: stockCode }));
-    detailSocket.onmessage = (event) => {
-        const d = JSON.parse(event.data);
-        if (d.stock_code !== stockCode) return;
-
-        if (d.type === 'orderbook') {
-            renderOrderbook(d); markLive('ob-live'); return;
+    // --- 종목 정보 ---
+    function renderInfo(failed) {
+        const box = $('sd-info');
+        if (!quote) {
+            box.innerHTML = failed ? stateHTML('error', '종목 정보를 불러오지 못했어요', '', 'quote') : skelRows(6);
+            return;
         }
-        if (d.type === 'trade') {
-            pushTick({ time: d.time, price: d.price, volume: d.volume, sign: d.sign });
-            setStrength(d.strength); markLive('tk-live'); return;
-        }
-        // type === 'price' (또는 구버전 무태그) → 헤더/차트/지표 갱신
-        currentPrice = d.price;
-        updateEstimate();
-        refreshDayDot();
-        document.getElementById('detail-price').textContent = won(d.price);
-        const ch = document.getElementById('detail-change');
-        ch.textContent = `어제보다 ${d.change_price > 0 ? '+' : ''}${qtyFmt(d.change_price)}원 (${d.change_rate}%)`;
-        ch.className = 'rt ' + (d.change_price > 0 ? 'up' : (d.change_price < 0 ? 'down' : 'muted'));
-        updateLastCandle(d.price, Math.floor(new Date(d.created_at).getTime() / 1000));
-    };
-
-    // 실시간 체결 → 마지막 캔들 갱신
-    //
-    // 🔴 여기 타임존 함정이 하나 있다(예전엔 조용히 틀려 있었다):
-    //    서버가 주는 캔들의 시간축은 'KST 벽시계 값을 UTC로 읽은 값'이다.
-    //    lightweight-charts가 시간축을 UTC로 해석해 라벨을 찍기 때문에, 이렇게 넣어야
-    //    화면에 09:00이 09:00으로 보인다.
-    //    반면 웹소켓이 주는 created_at 은 new Date().toISOString() = '진짜 UTC'다.
-    //    그대로 쓰면 두 값이 정확히 9시간 어긋나서, 실시간 캔들이 과거 자리에 떨어지고
-    //    `currentSlot > last.time` 조건에 걸려 조용히 버려진다(=실시간 갱신이 안 먹음).
-    //    → 실시간 시각에도 +9시간을 더해 서버 캔들과 같은 축으로 맞춘다.
-    const KST_OFFSET = 9 * 3600;
-
-    // 기간별 캔들 폭(초). 일봉 구간(1M/3M/1Y/2Y)은 일부러 비워 둔다 → 실시간 갱신을 하지 않는다.
-    // ⚠️ 여기 남겨두면 안 된다: 일봉 구간의 time 은 'YYYY-MM-DD' 문자열인데 실시간 캔들은 숫자라
-    //    섞이는 순간 lightweight-charts 가 에러를 내거나 봉이 엉뚱한 자리에 떨어진다.
-    //    (1M을 일봉으로 바꾼 2026-08-07에 1800 항목을 제거함)
-    const RANGE_BUCKET = { '1D': 60, '1W': 300 };
-
-    function updateLastCandle(price, timestamp) {
-        const bucketSec = RANGE_BUCKET[currentRange];
-        if (!bucketSec) return;                       // 일봉 보는 중 → 과거 차트라 건드리지 않음
-
-        const slot = Math.floor((timestamp + KST_OFFSET) / bucketSec) * bucketSec;
-        if (candleData.length === 0) {
-            candleData.push({ time: slot, open: price, high: price, low: price, close: price });
-        } else {
-            const last = candleData[candleData.length - 1];
-            if (last.time === slot) {
-                last.high = Math.max(last.high, price); last.low = Math.min(last.low, price); last.close = price;
-            } else if (slot > last.time) {
-                candleData.push({ time: slot, open: price, high: price, low: price, close: price });
-            } else { return; }                        // 이미 지나간 칸의 뒤늦은 체결 → 무시
-        }
-        const last = candleData[candleData.length - 1];
-        if (currentType === 'candle') series.update(last);
-        else series.update({ time: last.time, value: price });
+        const q = quote;
+        const rows = [
+            ['시장', esc(q.market || '—')], ['업종', esc(q.sector || '—')],
+            ['어제 종가', won(q.prev_close)], ['시가총액', num(q.market_cap) + '억원'],
+            ['52주 최고', won(q.w52_high)], ['52주 최저', won(q.w52_low)],
+            ['상한가', won(q.upper_limit)], ['하한가', won(q.lower_limit)],
+            ['PER', q.per ? q.per + '배' : '—'], ['PBR', q.pbr ? q.pbr + '배' : '—'],
+            ['EPS', won(q.eps)], ['BPS', won(q.bps)],
+            ['상장주식수', num(q.shares) + '주'], ['외국인 소진율', q.frgn_ehrt + '%'],
+        ];
+        box.innerHTML = '<div class="sd-info">' + rows.map(([k, v]) =>
+            `<div class="sd-info-row"><span class="k">${k}</span><span class="v">${v}</span></div>`).join('') + '</div>';
     }
 
-    // ---------- 커뮤니티 ----------
-    function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+    // --- 커뮤니티 ---
     async function loadPosts() {
+        const box = $('sd-posts');
+        if (!box.innerHTML) box.innerHTML = skelRows(4);
         try {
-            const posts = await fetch('get_posts.php?code=' + stockCode).then(r => r.json());
-            const box = document.getElementById('post-list');
-            if (!Array.isArray(posts) || !posts.length) {
-                box.innerHTML = '<div class="post-empty">아직 글이 없어요.<br>첫 의견을 남겨보세요 ✍️</div>';
-                return;
-            }
+            const posts = await getJSON('get_posts.php?code=' + CODE);
+            if (!Array.isArray(posts) || !posts.length) { box.innerHTML = stateHTML('empty', '아직 글이 없어요', '첫 의견을 남겨 보세요 ✍️'); return; }
             box.innerHTML = posts.map(p =>
-                `<div class="post-item"><div class="pmeta"><b>${esc(p.nickname)}</b><span>${(p.created_at || '').slice(5, 16)}</span></div>`
-                + `<div class="pbody">${esc(p.content)}</div></div>`).join('');
-        } catch (e) { console.warn('커뮤니티 로드 실패', e); }
+                `<div class="sd-post"><div class="m"><b>${esc(p.nickname)}</b><span>${esc((p.created_at || '').slice(5, 16))}</span></div>`
+                + `<div class="b">${esc(p.content)}</div></div>`).join('');
+        } catch (e) {
+            console.warn('커뮤니티 로드 실패', e);
+            box.innerHTML = stateHTML('error', '글을 불러오지 못했어요', '', 'community');
+        }
     }
-    async function submitPost(e) {
+    $('sd-post-form').addEventListener('submit', async e => {
         e.preventDefault();
-        if (!loggedIn) { location.href = 'login.php'; return; }
-        const ta = document.getElementById('post-input');
+        if (!LOGGED) { location.href = 'login.php'; return; }
+        const ta = $('sd-post-input');
         const content = ta.value.trim();
         if (!content) return;
-        const r = await fetch('post_add.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': CSRF },
-            body: 'stock_code=' + encodeURIComponent(stockCode) + '&content=' + encodeURIComponent(content)
-                + '&csrf_token=' + encodeURIComponent(CSRF),
-        }).then(r => r.json());
-        if (r.error === 'login') { location.href = 'login.php'; return; }
-        if (r.error === 'csrf') { alert('보안 토큰이 만료되었습니다. 새로고침 후 다시 시도해주세요.'); return; }
-        ta.value = '';
-        loadPosts();
+        const btn = e.target.querySelector('button'); btn.disabled = true;
+        try {
+            const r = await fetch('post_add.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': CSRF },
+                body: 'stock_code=' + encodeURIComponent(CODE) + '&content=' + encodeURIComponent(content) + '&csrf_token=' + encodeURIComponent(CSRF),
+            }).then(res => res.json());
+            if (r.error === 'login') { location.href = 'login.php'; return; }
+            if (r.error === 'csrf') { toast('보안 토큰이 만료됐어요. 새로고침 후 다시 해 주세요.'); return; }
+            if (r.error) { toast('글을 올리지 못했어요.'); return; }
+            ta.value = '';
+            loadPosts();
+        } catch (err) {
+            toast('글을 올리지 못했어요. 잠시 후 다시 해 주세요.');
+        } finally { btn.disabled = false; }
+    });
+
+    const PANE_LOAD = { ticks: loadTicks, invest: loadInvest, info: () => renderInfo(), community: loadPosts };
+    RETRY.ticks = loadTicks; RETRY.invest = loadInvest; RETRY.community = loadPosts;
+
+    // ================= 관심종목 별 =================
+    $('sd-star').addEventListener('click', async function () {
+        if (!LOGGED) { location.href = 'login.php'; return; }
+        const on = this.classList.contains('on');
+        this.disabled = true;
+        try {
+            const res = await fetch(on ? 'watchlist_remove.php' : 'watchlist_add.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': CSRF },
+                body: 'stock_code=' + encodeURIComponent(CODE) + '&csrf_token=' + encodeURIComponent(CSRF),
+            });
+            if (res.status === 401) { location.href = 'login.php'; return; }
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            // 서버가 '성공'이라고 답한 뒤에만 별을 바꾼다
+            this.classList.toggle('on', !on);
+            this.setAttribute('aria-pressed', String(!on));
+            this.title = !on ? '관심종목에서 빼기' : '관심종목에 추가';
+            toast(!on ? '관심종목에 추가했어요' : '관심종목에서 뺐어요');
+        } catch (e) {
+            toast('잠시 후 다시 시도해 주세요.');
+        } finally { this.disabled = false; }
+    });
+
+    // ================= 주문 =================
+    function updateEstimate() {
+        const q = parseInt($('sd-qty')?.value, 10) || 0;
+        if ($('sd-est')) $('sd-est').textContent = won(q * price);
+    }
+    $('sd-qty')?.addEventListener('input', updateEstimate);
+    document.querySelectorAll('[data-order]').forEach(b => b.addEventListener('click', () => {
+        const q = parseInt($('sd-qty').value, 10);
+        if (!q || q < 1) { toast('수량을 입력해 주세요.'); $('sd-qty').focus(); return; }
+        $('sd-order-type').value = b.dataset.order;
+        document.querySelectorAll('[data-order]').forEach(x => x.disabled = true);
+        $('sd-order-form').submit();
+    }));
+
+    // 휴대폰: 하단 버튼 → 주문 시트 열기
+    const isMobile = () => window.matchMedia('(max-width: 900px)').matches;
+    function openSheet() {
+        $('order').classList.add('open'); $('sd-dim').classList.add('open');
+        setTimeout(() => $('sd-qty')?.focus(), 250);
+    }
+    function closeSheet() { $('order').classList.remove('open'); $('sd-dim').classList.remove('open'); }
+    document.querySelectorAll('[data-open-order]').forEach(b => b.addEventListener('click', openSheet));
+    $('sd-dim').addEventListener('click', closeSheet);
+    $('sd-sheet-close').addEventListener('click', closeSheet);
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheet(); });
+
+    // 자동매매 화면의 '일반매매'(…#order)로 들어오면 주문 패널을 바로 보여준다
+    if (location.hash === '#order') {
+        requestAnimationFrame(() => {
+            if (isMobile()) { openSheet(); return; }
+            const p = $('order');
+            p.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            p.classList.add('w-highlight');
+            setTimeout(() => p.classList.remove('w-highlight'), 1600);
+        });
     }
 
-    // ---------- 부팅 ----------
-    loadChart();
-    loadInitial();
-    loadPosts();
-    window.addEventListener('load', resizeChart);   // 레이아웃 확정 후 차트 폭 재조정
+    // 휴대폰: 차트 ↔ 호가 탭
+    document.querySelector('.sd-mtabs').addEventListener('click', e => {
+        const b = e.target.closest('button[data-mtab]');
+        if (!b) return;
+        $('sd').dataset.mtab = b.dataset.mtab;
+        document.querySelectorAll('.sd-mtabs button').forEach(x => x.classList.toggle('on', x === b));
+    });
+
+    // ================= 실시간 (WebSocket, 끊기면 자동 재연결) =================
+    let ws = null, wsTries = 0, wsTimer = null, everOpened = false;
+    function connect() {
+        try {
+            ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/');
+        } catch (e) { return scheduleReconnect(); }
+        ws.onopen = () => {
+            ws.send(JSON.stringify({ action: 'watch', code: CODE }));
+            if (wsTries > 0) {                      // 다시 붙었으면 끊긴 동안 놓친 값을 한 번 맞춘다
+                toast('실시간 시세에 다시 연결됐어요');
+                loadBook(); loadQuote();
+            }
+            wsTries = 0; everOpened = true;
+        };
+        ws.onmessage = ev => {
+            let d; try { d = JSON.parse(ev.data); } catch (e) { return; }
+            if (d.stock_code !== CODE) return;      // 서버는 모든 종목을 보내므로 내 종목만 골라 쓴다
+            if (d.type === 'orderbook') { renderBook(d); markLive('ob-live'); return; }
+            if (d.type === 'trade') {
+                const t = { time: d.time, price: d.price, volume: d.volume, sign: d.sign, live: true };
+                ticks.unshift(t); if (ticks.length > 60) ticks.pop();
+                if (loaded.ticks) renderTicks();
+                setStrength(d.strength); markLive('tk-live');
+                updateLastCandle(d.price, d.time);
+                return;
+            }
+            // type === 'price' → 현재가·누적거래량
+            setPrice(d.price, { flash: true });
+            if (quote && d.volume) { quote.volume = d.volume; renderStats(); }
+        };
+        ws.onerror = () => { /* onclose 에서 재연결 처리 */ };
+        ws.onclose = scheduleReconnect;
+    }
+    function scheduleReconnect() {
+        clearTimeout(wsTimer);
+        wsTries++;
+        if (everOpened && wsTries === 2) toast('실시간 연결이 끊겼어요. 다시 연결하는 중…', 0);
+        const wait = Math.min(15000, 1000 * 2 ** Math.min(wsTries - 1, 4));   // 1, 2, 4, 8, 15초…
+        wsTimer = setTimeout(connect, wait);
+    }
+
+    // ================= 시작 =================
+    renderInfo();
+    if (initChart()) loadChart('1D');
+    else { $('sd-chart-skel').hidden = true; chartState('error', '차트를 표시할 수 없어요', '새로고침해 보세요.', null); }
+    loadQuote();
+    loadBook();
+    openPane('ticks');
+    connect();
+})();
 </script>
 
 <?php include 'includes/footer.php'; ?>
