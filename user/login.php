@@ -17,6 +17,7 @@ unset($_SESSION['login_email']);
 $error = $_GET['error'] ?? '';
 $nextQs = $next !== '' ? '?next=' . urlencode($next) : '';
 
+$pageTitle = '로그인';
 include 'includes/header.php';
 ?>
 
@@ -30,6 +31,8 @@ include 'includes/header.php';
             <div class="lg-alert ok">🎉 <span>가입이 끝났어요! 비밀번호를 입력하면 바로 시작할 수 있어요.</span></div>
         <?php elseif ($error === 'suspended'): ?>
             <div class="lg-alert err">⛔ <span>이용이 정지된 계정이에요. 관리자에게 문의해 주세요.</span></div>
+        <?php elseif ($error === 'demo'): ?>
+            <div class="lg-alert err">⚠️ <span>체험 계정을 준비하지 못했어요. 잠시 후 다시 시도해 주세요.</span></div>
         <?php elseif ($error === 'csrf'): ?>
             <div class="lg-alert err">⚠️ <span>보안 확인 시간이 지났어요. 다시 한 번 로그인해 주세요.</span></div>
         <?php elseif ($error !== ''): ?>
@@ -61,6 +64,14 @@ include 'includes/header.php';
             </div>
 
             <button type="submit" class="lg-btn" id="lg-submit">로그인</button>
+        </form>
+
+        <!-- 가입 없이 바로 둘러보기 (모두가 같이 쓰는 체험 계정, 매일 새벽 초기화) -->
+        <div class="lg-or">또는</div>
+        <form action="demo_login.php" method="POST" style="margin:0;">
+            <?= csrfField() ?>
+            <input type="hidden" name="next" value="<?= htmlspecialchars($next !== '' ? $next : 'index.php') ?>">
+            <button type="submit" class="lg-btn ghost">로그인 없이 둘러보기</button>
         </form>
 
         <p class="lg-foot">아직 회원이 아니신가요?<a href="join.php<?= $nextQs ?>">회원가입</a></p>

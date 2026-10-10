@@ -34,7 +34,8 @@ $orderJs = array_map(fn($o) => [
     'auto'  => (int) ($o['is_auto'] ?? 0),
 ], $orders);
 
-$pageWide = true;
+$pageWide  = true;
+$pageTitle = '내 계좌';
 include 'includes/header.php';
 ?>
 
@@ -163,7 +164,8 @@ include 'includes/header.php';
     let sortBy = 'value';
     function logo(code, name) {
         let hash = 0; for (const ch of code) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
-        return `<span class="acct-logo" style="background:hsl(${hash % 360},62%,62%)"><img src="assets/logos/${esc(code)}.png" alt="" onerror="this.remove()">${esc(name.slice(0, 1))}</span>`;
+        const img = window.HAS_LOGO && HAS_LOGO.has(code) ? `<img src="assets/logos/${esc(code)}.png" alt="" onerror="this.remove()">` : '';   // 있는 로고만 요청
+        return `<span class="acct-logo" style="background:hsl(${hash % 360},62%,62%)">${img}${esc(name.slice(0, 1))}</span>`;
     }
     function renderHolds() {
         $('hold-count').textContent = holds.length || '';

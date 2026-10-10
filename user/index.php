@@ -79,7 +79,12 @@ include 'includes/header.php';
                 <section class="hm-card hm-cta hm-my">
                     <div class="t">1,000만원으로<br>모의투자를 시작해 보세요</div>
                     <div class="d">진짜 시세로 사고팔아 보면서, 실제 돈은 하나도 잃지 않아요.</div>
-                    <a href="login.php">로그인하고 시작하기</a>
+                    <!-- 가입 없이 바로: 모두가 같이 쓰는 체험 계정으로 로그인 (demo_login.php) -->
+                    <form action="demo_login.php" method="POST" style="margin:0;">
+                        <?= csrfField() ?>
+                        <button type="submit" class="hm-cta-btn">로그인 없이 둘러보기</button>
+                    </form>
+                    <a href="login.php" class="hm-cta-sub">로그인 · 회원가입</a>
                 </section>
             <?php endif; ?>
 
@@ -127,7 +132,9 @@ include 'includes/header.php';
     }
     function logo(code, name) {
         let h = 0; for (const ch of String(code)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-        return `<span class="hm-logo" style="background:hsl(${h % 360},62%,62%)"><img src="assets/logos/${esc(code)}.png" alt="" loading="lazy" onload="this.classList.add('ok')" onerror="this.remove()">${esc(String(name || '?').trim().charAt(0))}</span>`;
+        // 로고 그림은 실제로 있는 종목만 요청한다 (없는 그림을 부르면 404 요청이 쌓임) — 목록은 header.php 의 HAS_LOGO
+        const img = window.HAS_LOGO && HAS_LOGO.has(code) ? `<img src="assets/logos/${esc(code)}.png" alt="" loading="lazy" onload="this.classList.add('ok')" onerror="this.remove()">` : '';
+        return `<span class="hm-logo" style="background:hsl(${h % 360},62%,62%)">${img}${esc(String(name || '?').trim().charAt(0))}</span>`;
     }
 
     // ================= 장 상태 =================

@@ -24,7 +24,8 @@ $initial = [
     'cash'      => (int) ($account['cash_balance'] ?? 0),
 ];
 
-$pageWide = true;
+$pageWide  = true;
+$pageTitle = '자동매매';
 include 'includes/header.php';
 ?>
 
@@ -135,7 +136,8 @@ include 'includes/header.php';
     }
     function logo(code, name) {
         let h = 0; for (const ch of String(code)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-        return `<span class="au-logo" style="background:hsl(${h % 360},62%,62%)"><img src="assets/logos/${esc(code)}.png" alt="" loading="lazy" onload="this.classList.add('ok')" onerror="this.remove()">${esc(String(name || '?').trim().charAt(0))}</span>`;
+        const img = window.HAS_LOGO && HAS_LOGO.has(code) ? `<img src="assets/logos/${esc(code)}.png" alt="" loading="lazy" onload="this.classList.add('ok')" onerror="this.remove()">` : '';   // 있는 로고만 요청
+        return `<span class="au-logo" style="background:hsl(${h % 360},62%,62%)">${img}${esc(String(name || '?').trim().charAt(0))}</span>`;
     }
     let toastT = null;
     function toast(msg) {

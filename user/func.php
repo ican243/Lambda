@@ -1094,3 +1094,110 @@ function setAutoTradePaused($conn, $userId, $paused)
     mysqli_stmt_bind_param($stmt, "ii", $userId, $flag);
     return mysqli_stmt_execute($stmt);
 }
+
+// =============================================================
+// 체험 계정 (포트폴리오 방문자용 "로그인 없이 둘러보기")
+// =============================================================
+// · 모두가 같이 쓰는 계정 하나. 비밀번호는 아무도 모르는 무작위값 → demo_login.php 로만 들어온다.
+// · 누가 다 팔아버려도 매일 새벽 cron/reset_demo.php 가 resetDemoAccount() 로 처음 상태로 되돌린다.
+// · 처음 상태 = 거래대금 상위 종목 몇 개를 들고 있고, 최근 열흘쯤 사고판 기록이 있는 계좌
+//   (빈 계좌면 내 계좌·자동매매 화면이 휑해서 무엇을 만든 건지 보여줄 수가 없다)
+const DEMO_EMAIL = 'demo@moa.local';
+const DEMO_NICKNAME = '체험계정';
+
+function getDemoUserId($conn)
+{
+    $u = getUserByEmail($conn, DEMO_EMAIL);
+    return $u ? (int) $u['id'] : 0;
+}
+
+// 지금 로그인한 사람이 체험 계정인가 (세션 표시 + DB의 체험 계정 id 둘 다 확인)
+function isDemoUser($conn)
+{
+    if (!isLoggedIn()) return false;
+    if (!empty($_SESSION['is_demo'])) return true;
+    return (int) $_SESSION['user_id'] === getDemoUserId($conn);
+}
+
+function resetDemoAccount($conn)
+{
+    ensureAutoTradeSchema($conn);   // orders.is_auto 컬럼 보장
+
+    // 1) 계정이 없으면 만든다 (비밀번호 = 버려지는 무작위값)
+    $uid = getDemoUserId($conn);
+    if (!$uid) {
+        createUser($conn, DEMO_EMAIL, password_hash(bin2hex(random_bytes(24)), PASSWORD_DEFAULT), DEMO_NICKNAME);
+        $uid = getDemoUserId($conn);
+        if (!$uid) throw new Exception('체험 계정을 만들지 못했습니다.');
+    }
+
+    // 2) 시드에 쓸 종목: 거래대금 상위 중 가격이 적당한 것 6개 (1주 가격이 너무 비싸면 수량이 0이 됨)
+    $picks = [];
+    $res = mysqli_query($conn, "
+        SELECT sl.stock_code, sl.price FROM stock_latest sl
+        JOIN stock_master sm ON sm.stock_code = sl.stock_code
+        WHERE sl.price BETWEEN 5000 AND 400000
+        ORDER BY (CASE WHEN sl.trade_value > 0 THEN sl.trade_value ELSE sl.price * sl.volume END) DESC
+        LIMIT 6");
+    while ($r = mysqli_fetch_assoc($res)) $picks[] = ['code' => $r['stock_code'], 'price' => (int) $r['price']];
+    if (count($picks) < 6) throw new Exception('시드에 쓸 시세 데이터가 부족합니다.');
+
+    $initial = getInitialCashAmount($conn);
+    mysqli_begin_transaction($conn);
+    try {
+        // 3) 싹 비우기
+        foreach (['orders', 'holdings', 'watchlist', 'auto_trade_settings', 'stock_posts'] as $t) {
+            @mysqli_query($conn, "DELETE FROM `$t` WHERE user_id = $uid");
+        }
+
+        // 4) 보유 5종목: 평균단가를 현재가와 살짝 다르게 → 수익/손실이 섞여 보이게
+        $factor = [0.92, 1.04, 0.97, 0.88, 1.06];      // 평균단가 = 현재가 × factor
+        $budget = [1800000, 1300000, 900000, 700000, 500000];
+        $daysAgo = [9, 7, 5, 3, 1];
+        $isAuto = [0, 1, 0, 1, 0];
+        $orders = [];   // [code, type, qty, price, daysAgo, minute, auto]
+        $cash = $initial;
+        $insH = mysqli_prepare($conn, "INSERT INTO holdings (user_id, stock_code, quantity, avg_price) VALUES (?, ?, ?, ?)");
+        for ($i = 0; $i < 5; $i++) {
+            $avg = (int) round($picks[$i]['price'] * $factor[$i]);
+            $qty = max(1, intdiv($budget[$i], $avg));
+            $code = $picks[$i]['code'];
+            mysqli_stmt_bind_param($insH, "isid", $uid, $code, $qty, $avg);
+            mysqli_stmt_execute($insH);
+            $orders[] = [$code, 'buy', $qty, $avg, $daysAgo[$i], 35 + $i * 41, $isAuto[$i]];
+            $cash -= $qty * $avg;
+        }
+        // 5) 사고 판 종목 하나 (판매 기록 + 실현수익 예시)
+        $p = $picks[5]['price'];
+        $buyPx = (int) round($p * 0.95); $sellPx = (int) round($p * 1.02);
+        $orders[] = [$picks[5]['code'], 'buy', 10, $buyPx, 6, 50, 1];
+        $orders[] = [$picks[5]['code'], 'sell', 10, $sellPx, 2, 130, 1];
+        $cash += 10 * ($sellPx - $buyPx);
+
+        $insO = mysqli_prepare($conn, "INSERT INTO orders (user_id, stock_code, order_type, quantity, price, total_amount, created_at, is_auto)
+                                       VALUES (?, ?, ?, ?, ?, ?, DATE_ADD(DATE_SUB(CURDATE(), INTERVAL ? DAY), INTERVAL (540 + ?) MINUTE), ?)");
+        foreach ($orders as [$code, $type, $qty, $px, $d, $min, $auto]) {
+            $total = $qty * $px;
+            mysqli_stmt_bind_param($insO, "issiiiiii", $uid, $code, $type, $qty, $px, $total, $d, $min, $auto);
+            mysqli_stmt_execute($insO);
+        }
+
+        // 6) 관심종목 4개
+        $insW = mysqli_prepare($conn, "INSERT INTO watchlist (user_id, stock_code) VALUES (?, ?)");
+        foreach ([$picks[0]['code'], $picks[2]['code'], $picks[4]['code'], $picks[5]['code']] as $code) {
+            mysqli_stmt_bind_param($insW, "is", $uid, $code);
+            mysqli_stmt_execute($insW);
+        }
+
+        // 7) 현금 = 시작 금액 − 산 돈 + 판 돈
+        $acc = mysqli_query($conn, "SELECT user_id FROM accounts WHERE user_id = $uid");
+        if (mysqli_num_rows($acc)) mysqli_query($conn, "UPDATE accounts SET cash_balance = " . (int) $cash . " WHERE user_id = $uid");
+        else mysqli_query($conn, "INSERT INTO accounts (user_id, cash_balance) VALUES ($uid, " . (int) $cash . ")");
+
+        mysqli_commit($conn);
+    } catch (Exception $e) {
+        mysqli_rollback($conn);
+        throw $e;
+    }
+    return ['user_id' => $uid, 'cash' => (int) $cash, 'holdings' => 5, 'orders' => count($orders)];
+}

@@ -26,6 +26,7 @@ $fieldErr = [
 $alertMsg = $error === 'csrf' ? '보안 확인 시간이 지났어요. 다시 한 번 시도해 주세요.'
           : (($error !== '' && !$fieldErr) ? '가입하지 못했어요. 잠시 후 다시 시도해 주세요.' : '');
 
+$pageTitle = '회원가입';
 include 'includes/header.php';
 ?>
 

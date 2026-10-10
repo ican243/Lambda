@@ -20,6 +20,7 @@ $pageClass = 'app-wide';   // 메인과 같은 폭(1180px) — 화면 가장자�
 // 없는 종목 → 하얀 글씨 한 줄(die) 대신 메인과 같은 모양의 안내 화면
 if (!$stock) {
     http_response_code(404);
+    $pageTitle = '종목을 찾을 수 없어요';
     include 'includes/header.php';
     ?>
     <div class="sd">
@@ -54,7 +55,11 @@ $dirCls = $chg > 0 ? 'up' : ($chg < 0 ? 'down' : 'flat');
 
 // 로고 색 (종목코드 해시 → 파스텔). 실제 이미지 있으면 이미지로 대체.
 $hue = crc32($stockCode) % 360;
+$hasLogo = is_file(__DIR__ . '/assets/logos/' . $stockCode . '.png');   // 없는 그림은 요청하지 않는다
 
+$pageTitle  = $stock['stock_name'];
+$pageDesc   = $stock['stock_name'] . '(' . $stockCode . ') ' . ($price ? number_format($price) . '원' : '') . ' — 차트·호가·체결을 보고 모의투자로 사고팔아 보세요.';
+$hideTabBar = true;   // 이 화면은 자기만의 하단 [판매][구매] 버튼이 있어서 공통 하단 메뉴는 숨긴다
 include 'includes/header.php';
 ?>
 
@@ -68,7 +73,7 @@ include 'includes/header.php';
         <div>
             <div class="sd-id">
                 <span class="sd-logo" style="background:hsl(<?= $hue ?>,62%,62%);">
-                    <img src="assets/logos/<?= htmlspecialchars($stockCode) ?>.png" alt="" onerror="this.remove()">
+                    <?php if ($hasLogo): ?><img src="assets/logos/<?= htmlspecialchars($stockCode) ?>.png" alt="" onerror="this.remove()"><?php endif; ?>
                     <?= htmlspecialchars(mb_substr($stock['stock_name'], 0, 1)) ?>
                 </span>
                 <span class="sd-name"><?= htmlspecialchars($stock['stock_name']) ?></span>
@@ -446,6 +451,7 @@ include 'includes/header.php';
     const BUCKET_SEC = { '1D': 60, '1W': 300 };        // 실시간으로 마지막 봉을 갱신하는 기간과 봉 폭(초)
     let range = '1D', chartType = null, userPickedType = false;
     let candles = [], series = null, prevLine = null, chart = null, loadSeq = 0;
+    let firstLoad = true;   // 처음 열 때만: '1일'이 비어 있으면(주말·장 시작 전·시세 중단) 자동으로 '3달'을 보여준다
 
     function chartState(kind, title, desc, retry, label) {
         const el = $('sd-chart-state');
@@ -519,7 +525,7 @@ include 'includes/header.php';
         document.querySelectorAll('#sd-type button').forEach(b => b.classList.toggle('on', b.dataset.type === chartType));
     }
 
-    async function loadChart(r = range) {
+    async function loadChart(r = range, note = '') {
         const seq = ++loadSeq;
         const wrap = $('sd-chart-wrap');
         if (candles.length) wrap.classList.add('is-busy'); else $('sd-chart-skel').hidden = false;
@@ -534,6 +540,15 @@ include 'includes/header.php';
             setTypeButtons();
             chart.applyOptions({ timeScale: { timeVisible: !DAILY.includes(r), secondsVisible: false } });
             drawSeries();
+            if (!candles.length && r === '1D' && firstLoad) {
+                // 방문자가 처음 보는 화면이 빈 차트면 아무것도 없는 서비스처럼 보인다 → 3달 차트로 바로 바꿔서 보여준다
+                // (1달이 아니라 3달인 이유: 시세 수집이 멈춘 기간이 길면 1달 안에는 봉이 몇 개 없어서 여전히 휑해 보임)
+                firstLoad = false;
+                document.querySelectorAll('#sd-ranges button').forEach(x => x.classList.toggle('on', x.dataset.range === '3M'));
+                loadChart('3M', '오늘은 거래가 없어서 최근 3달을 보여드려요');
+                return;
+            }
+            firstLoad = false;
             if (!candles.length && r === '1D') {
                 // '1일' = 오늘 하루. 주말·공휴일·장 시작 전엔 비어 있는 게 정상 → 1주 차트로 바로 넘어갈 수 있게
                 chartState('empty', '오늘은 아직 거래가 없어요', '주말·공휴일이거나 장 시작(오전 9시) 전이에요.', 'week', '1주 차트 보기');
@@ -542,7 +557,7 @@ include 'includes/header.php';
                 chartState('empty', '이 기간엔 거래 기록이 없어요', '다른 기간을 눌러 보세요.');
                 $('sd-chart-note').textContent = '';
             } else {
-                $('sd-chart-note').textContent = `${RANGE_RES[r]} · ${candles.length.toLocaleString()}개`;
+                $('sd-chart-note').textContent = `${note ? note + ' · ' : ''}${RANGE_RES[r]} · ${candles.length.toLocaleString()}개`;
             }
         } catch (e) {
             if (seq !== loadSeq) return;
@@ -700,6 +715,7 @@ include 'includes/header.php';
             }).then(res => res.json());
             if (r.error === 'login') { location.href = 'login.php?next=' + encodeURIComponent('stock_detail.php?code=' + CODE); return; }
             if (r.error === 'csrf') { toast('보안 토큰이 만료됐어요. 새로고침 후 다시 해 주세요.'); return; }
+            if (r.error === 'demo') { toast('체험 계정은 글을 쓸 수 없어요. 가입하면 쓸 수 있어요.'); return; }
             if (r.error) { toast('글을 올리지 못했어요.'); return; }
             ta.value = '';
             loadPosts();
