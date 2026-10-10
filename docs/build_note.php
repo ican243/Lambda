@@ -121,7 +121,7 @@ function stripNonCode($line)
 // 2.5 비밀값 마스킹  🔒 (이 노트를 남에게 보여줄 수 있게 하는 안전장치)
 // ---------------------------------------------------------------
 // 노트는 바탕화면에 두고 카톡으로 보내기도 하는 '문서'다.
-// 그런데 db.php 에는 실제 DB 비밀번호가, kis_config.php 에는 한투 앱키/시크릿이 평문으로 있다.
+// 그런데 db_config.php 에는 실제 DB 비밀번호가, kis_config.php 에는 한투 앱키/시크릿이 평문으로 있다.
 // 그대로 넣으면 비밀이 문서에 영구 박제된다 → 빌드할 때 자동으로 가린다.
 //
 // 🔑 값을 코드에 적어두지 않고 '설정 파일에서 읽어와서' 가린다.
@@ -135,8 +135,8 @@ function collectSecrets($ROOT_PROJECT, $ROOT_WWW)
         if (strlen($v) >= 6) $secrets[$v] = true;
     };
 
-    // config/db.php 의 $pass = '...'
-    $db = $ROOT_PROJECT . '/config/db.php';
+    // config/db_config.php 의 $pass = '...'
+    $db = $ROOT_PROJECT . '/config/db_config.php';
     if (is_file($db) && preg_match('/\$pass\s*=\s*[\'"]([^\'"]+)[\'"]/', file_get_contents($db), $m)) {
         $push($m[1]);
     }

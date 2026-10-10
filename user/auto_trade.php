@@ -485,7 +485,7 @@ function sendWatch() {
 }
 
 function connectWs() {
-    try { sock = new WebSocket('ws://localhost:8080'); } catch (e) { return; }
+    try { sock = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/'); } catch (e) { return; }
 
     sock.onopen = () => { watching = ''; sendWatch(); };
 

@@ -588,6 +588,29 @@ function ensureCandle1dTable($conn)
     $done = true;
 }
 
+// 지수(코스피/코스닥) 일봉 테이블 — cron/backfill_index.php 가 채운다.
+function ensureIndexCandle1dTable($conn)
+{
+    static $done = false;
+    if ($done) return;
+    mysqli_query($conn, "
+        CREATE TABLE IF NOT EXISTS index_candles_1d (
+            index_code  VARCHAR(10)    NOT NULL COMMENT '0001=코스피 1001=코스닥',
+            index_name  VARCHAR(20)    NOT NULL,
+            d           DATE           NOT NULL COMMENT '거래일',
+            open_p      DECIMAL(10,2)  NOT NULL,
+            high_p      DECIMAL(10,2)  NOT NULL,
+            low_p       DECIMAL(10,2)  NOT NULL,
+            close_p     DECIMAL(10,2)  NOT NULL,
+            volume      BIGINT DEFAULT 0 COMMENT '그날 거래량',
+            trade_value BIGINT DEFAULT 0 COMMENT '그날 거래대금(원)',
+            PRIMARY KEY (index_code, d),
+            KEY idx_d (d)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_unicode_ci
+    ");
+    $done = true;
+}
+
 // 'YYYY-MM-DD HH:MM:SS' → 유닉스 초.
 // ⚠️ 반드시 ' UTC'를 붙인다. 우리 DB 시각은 전부 KST '벽시계 값'이고,
 //    lightweight-charts는 타임스탬프를 UTC로 해석해 라벨을 찍는다.

@@ -248,7 +248,9 @@ body {
 .nav-search { position: relative; flex: 1; max-width: 360px; margin-left: auto; }
 .nav-search input {
     width: 100%; border: none; background: #f2f4f6; border-radius: 12px;
-    padding: 10px 14px; font-family: inherit; font-size: 14px; color: var(--text); outline: none;
+    /* ⚠️ font-size 16px 미만이면 iOS 사파리가 포커스 시 화면을 자동으로 확대해버린다(모바일에서
+       "갑자기 확대되고 흔들리는" 것처럼 보이는 원인). 16px 밑으로 절대 내리지 말 것. */
+    padding: 10px 14px; font-family: inherit; font-size: 16px; color: var(--text); outline: none;
 }
 .nav-search input:focus { box-shadow: 0 0 0 2px var(--primary) inset; background: #fff; }
 .nav-search-results {
@@ -400,19 +402,32 @@ body {
 .post-item .pbody { font-size:14px; line-height:1.5; word-break:break-word; }
 .post-empty { color:var(--text-sub); font-size:13px; text-align:center; padding:28px 0; line-height:1.6; }
 .post-form { display:flex; gap:8px; align-items:stretch; }
-.post-form textarea { flex:1; resize:none; height:42px; min-height:42px; border:1px solid var(--line); border-radius:12px; padding:10px 14px; font-family:inherit; font-size:14px; background:#f9fafb; transition:.15s; }
+.post-form textarea { flex:1; resize:none; height:42px; min-height:42px; border:1px solid var(--line); border-radius:12px; padding:10px 14px; font-family:inherit; font-size:16px; background:#f9fafb; transition:.15s; }   /* 16px 미만이면 iOS 자동확대 */
 .post-form textarea:focus { outline:none; background:#fff; box-shadow:0 0 0 2px var(--primary) inset; }
 
-/* 호가창 */
-.ob-row { display:grid; grid-template-columns:1fr 88px; align-items:center; height:26px; font-size:12px; font-variant-numeric:tabular-nums; }
-.ob-price { text-align:right; padding-right:10px; font-weight:700; }
-.ob-qty { position:relative; height:22px; display:flex; align-items:center; }
-.ob-qty .bar { position:absolute; top:1px; bottom:1px; right:0; border-radius:3px; }
-.ob-qty .num { position:relative; z-index:1; font-size:11px; color:var(--text-sub); padding-left:6px; }
-.ob-ask .bar { background:rgba(49,130,246,.13); }
-.ob-bid .bar { background:rgba(240,68,82,.13); }
+/* 호가창 — 판매대기(좌) · 가격(중앙) · 구매대기(우), 토스 스타일 좌우 비교 */
+.ob-head { display:grid; grid-template-columns:1fr 64px 1fr; gap:8px; font-size:11px; font-weight:700; color:var(--text-sub); padding-bottom:6px; margin-bottom:2px; border-bottom:1px solid var(--line); }
+.ob-head span:first-child { text-align:right; }
+.ob-head span:nth-child(2) { text-align:center; }
+.ob-head span:last-child { text-align:left; }
+
+.ob-row { display:grid; grid-template-columns:1fr 64px 1fr; align-items:center; gap:8px; height:26px; font-size:12px; font-variant-numeric:tabular-nums; }
+.ob-price { text-align:center; font-weight:700; }
 .ob-ask .ob-price { color:var(--down); }
 .ob-bid .ob-price { color:var(--up); }
+
+.ob-side { position:relative; height:22px; display:flex; align-items:center; }
+.ob-side .bar { position:absolute; top:1px; bottom:1px; border-radius:3px; }
+.ob-side .num { position:relative; z-index:1; font-size:11px; color:var(--text-sub); }
+
+.ob-ask-side { justify-content:flex-end; }                                  /* 판매대기: 가격 쪽(오른쪽)에 붙어서 왼쪽으로 자람 */
+.ob-ask-side .bar { right:0; background:rgba(49,130,246,.13); }
+.ob-ask-side .num { padding-right:6px; }
+
+.ob-bid-side { justify-content:flex-start; }                                /* 구매대기: 가격 쪽(왼쪽)에 붙어서 오른쪽으로 자람 */
+.ob-bid-side .bar { left:0; background:rgba(240,68,82,.13); }
+.ob-bid-side .num { padding-left:6px; }
+
 .ob-mid { text-align:center; padding:9px 0; margin:6px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); font-weight:700; font-size:16px; font-variant-numeric:tabular-nums; }
 .ob-total { display:flex; justify-content:space-between; font-size:11px; color:var(--text-sub); margin-top:10px; font-variant-numeric:tabular-nums; }
 .ob-total b { color:var(--text); font-weight:700; }

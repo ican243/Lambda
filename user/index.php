@@ -217,7 +217,7 @@ include 'includes/header.php';
     }, 30000);
 
     // ---------- 실시간 WS: 가격만 즉시 갱신 ----------
-    const ws = new WebSocket('ws://localhost:8080');
+    const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/');
     ws.onmessage = (event) => {
         const d = JSON.parse(event.data);
         if (d.type && d.type !== 'price') return; // 상세용 호가/체결 메시지는 홈에서 무시

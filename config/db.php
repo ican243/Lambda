@@ -1,11 +1,10 @@
 <?php
 // config/db.php
-// DB 연결 정보 (Laragon 기본값)
+// DB 연결
+// 접속 정보($host, $dbname, $user, $pass)는 db_config.php 에 따로 둔다 (Git 제외).
+// 비밀번호가 Git 에 올라가지 않게 하기 위함. 없으면 db_config.example.php 를 복사해서 만든다.
 
-$host = 'lambda.cm-vw.com';
-$dbname = 'lambda_stock_db';
-$user = 'lambda';
-$pass = 'dlawlsgnl99';
+require_once __DIR__ . '/db_config.php';
 
 $conn = mysqli_connect($host, $user, $pass, $dbname);
 

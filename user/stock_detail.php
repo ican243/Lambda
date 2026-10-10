@@ -277,25 +277,30 @@ include 'includes/header.php';
     }
 
     // ---------- 호가창 ----------
+    // 토스처럼 판매대기(매도)는 왼쪽, 가격은 가운데, 구매대기(매수)는 오른쪽 — 좌우로 바로 비교되게.
     function renderOrderbook(d) {
         if (!d || d.error || !d.asks) return;
         const all = d.asks.concat(d.bids).map(x => x.qty);
         const maxQty = Math.max(1, ...all);
-        let html = '';
+        let html = '<div class="ob-head"><span>판매대기</span><span>가격</span><span>구매대기</span></div>';
         // 매도호가: askp10(높은가) → askp1(최우선). 위에서 아래로.
         for (let i = 9; i >= 0; i--) {
             const a = d.asks[i];
             const w = (a.qty / maxQty * 100).toFixed(0);
-            html += `<div class="ob-row ob-ask"><div class="ob-price">${qtyFmt(a.price)}</div>`
-                 +  `<div class="ob-qty"><span class="bar" style="width:${w}%"></span><span class="num">${qtyFmt(a.qty)}</span></div></div>`;
+            html += `<div class="ob-row ob-ask">`
+                 +  `<div class="ob-side ob-ask-side"><span class="bar" style="width:${w}%"></span><span class="num">${qtyFmt(a.qty)}</span></div>`
+                 +  `<div class="ob-price">${qtyFmt(a.price)}</div>`
+                 +  `<div class="ob-side ob-bid-side"></div></div>`;
         }
         html += `<div class="ob-mid ${priceClass(currentPrice)}">${qtyFmt(currentPrice)}</div>`;
         // 매수호가: bidp1(최우선) → bidp10.
         for (let i = 0; i < 10; i++) {
             const b = d.bids[i];
             const w = (b.qty / maxQty * 100).toFixed(0);
-            html += `<div class="ob-row ob-bid"><div class="ob-price">${qtyFmt(b.price)}</div>`
-                 +  `<div class="ob-qty"><span class="bar" style="width:${w}%"></span><span class="num">${qtyFmt(b.qty)}</span></div></div>`;
+            html += `<div class="ob-row ob-bid">`
+                 +  `<div class="ob-side ob-ask-side"></div>`
+                 +  `<div class="ob-price">${qtyFmt(b.price)}</div>`
+                 +  `<div class="ob-side ob-bid-side"><span class="bar" style="width:${w}%"></span><span class="num">${qtyFmt(b.qty)}</span></div></div>`;
         }
         html += `<div class="ob-total"><span>매도잔량 <b>${qtyFmt(d.total_ask)}</b></span><span>매수잔량 <b>${qtyFmt(d.total_bid)}</b></span></div>`;
         document.getElementById('orderbook').innerHTML = html;
@@ -343,7 +348,12 @@ include 'includes/header.php';
     }
 
     // ---------- 위젯 대시보드 (gridstack: 이동 + 칸단위 리사이즈) ----------
-    const LAYOUT_KEY = 'moa_widget_layout_v1';
+    // ⚠️ 일부러 배치를 저장하지 않는다. 페이지 안에서 끌어서 옮기고 크기를 바꾸는 건 자유지만,
+    //    새로고침하거나 다른 종목으로 이동하면 항상 HTML의 gs-w/gs-h 기본값으로 시작해야 한다.
+    //    (예전엔 localStorage에 저장해서 종목을 옮겨도 남아있었는데, 다른 종목엔 어울리지 않는
+    //     배치가 그대로 적용돼 위젯이 겹치거나 어긋나 보이는 문제가 있었다.)
+    try { localStorage.removeItem('moa_widget_layout_v1'); } catch (e) {}   // 예전 버전이 저장해둔 값 정리
+
     const grid = GridStack.init({
         column: 12,
         cellHeight: 58,
@@ -354,17 +364,7 @@ include 'includes/header.php';
         columnOpts: { breakpointForWindow: true, breakpoints: [{ w: 768, c: 1 }] },  // 좁으면 1열
     }, document.getElementById('pane-chart'));
 
-    function saveLayout() {
-        try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(grid.save(false))); } catch (e) {}
-    }
-    (function restoreLayout() {
-        let saved;
-        try { saved = JSON.parse(localStorage.getItem(LAYOUT_KEY)); } catch { saved = null; }
-        if (Array.isArray(saved) && saved.length) grid.load(saved);   // 저장된 위치/크기 복원
-    })();
-
-    grid.on('change', saveLayout);
-    grid.on('resizestop', () => { saveLayout(); resizeChart(); });
+    grid.on('resizestop', resizeChart);
 
     // #order 로 들어온 경우(자동매매 화면의 '일반매매' 버튼) 주문 패널로 스크롤 + 잠깐 강조.
     // gridstack이 위젯을 absolute 로 재배치하므로 브라우저 기본 해시 점프는 엉뚱한 곳으로 간다
@@ -379,8 +379,7 @@ include 'includes/header.php';
         });
     }
 
-    function resetLayout() {          // 기본 배치로 초기화
-        localStorage.removeItem(LAYOUT_KEY);
+    function resetLayout() {          // 기본 배치로 초기화 (새로고침이면 어차피 기본값이지만, 버튼으로도 즉시 되게)
         location.reload();
     }
 
@@ -439,7 +438,16 @@ include 'includes/header.php';
 
             // 일봉이면 시:분 축을 끈다 (안 끄면 전부 00:00으로 찍힌다)
             chart.applyOptions({ timeScale: { timeVisible: !isDailyRange(), secondsVisible: false } });
-            renderChart();
+
+            // 1일·1주는 KIS 모의투자 실시간 체결이 몇 분에 한 번씩만 들어와서(장중에도 그렇다)
+            // 1분봉 안에 값이 하나뿐인 경우가 많다 → 캔들 몸통이 안 보이고 납작한 선으로만 찍힌다.
+            // 그래서 이 두 구간은 라인차트로 시작한다(점과 점을 이어 그리므로 뚝뚝 끊겨도 자연스럽다).
+            // 일봉 구간(데이터가 실제 거래소 값이라 충분함)은 기존처럼 캔들로 시작.
+            // 버튼(캔들/라인)으로 언제든 수동 전환 가능 — 그 선택은 다음 기간 전환 전까지 유지된다.
+            const wantType = (range === '1D' || range === '1W') ? 'line' : 'candle';
+            if (wantType !== currentType) switchChartType(wantType);
+            else renderChart();
+
             chart.timeScale().fitContent();
 
             const note = document.getElementById('chart-note');
@@ -535,7 +543,7 @@ include 'includes/header.php';
         const el = document.getElementById(id);
         if (el) { el.classList.add('on'); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('on'), 4000); }
     }
-    const detailSocket = new WebSocket('ws://localhost:8080');
+    const detailSocket = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/');
     detailSocket.onopen = () => detailSocket.send(JSON.stringify({ action: 'watch', code: stockCode }));
     detailSocket.onmessage = (event) => {
         const d = JSON.parse(event.data);

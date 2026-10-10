@@ -22,6 +22,10 @@ $totalAsset = $account['cash_balance'] + $stockValue;
 include 'includes/header.php';
 ?>
 
+<!-- 보유종목/주문내역 위젯(이동): 로컬 라이브러리 (CDN 왕복 제거) -->
+<link href="assets/gridstack.min.css" rel="stylesheet">
+<script src="assets/gridstack-all.js"></script>
+
 <div style="margin: 12px 0 8px;">
     <a href="index.php" class="muted" style="text-decoration:none;font-size:15px;font-weight:600;">← 목록</a>
 </div>
@@ -47,147 +51,112 @@ include 'includes/header.php';
     </div>
 </div>
 
-<!-- 빠른 주문 -->
-<div class="section-title">빠른 주문</div>
-<div class="card-t">
-    <form action="trade_process.php" method="POST" id="trade-form">
-        <?= csrfField() ?>
-        <!-- 종목명으로 검색 → 선택하면 코드가 자동으로 채워짐 (초보자 친화) -->
-        <div class="ac-wrap" style="margin-bottom:10px;">
-            <input type="text" id="q-search" class="input-t" autocomplete="off"
-                placeholder="종목명으로 검색 (예: 삼성전자, 하이닉스)">
-            <input type="hidden" name="stock_code" id="q-code">
-            <div id="q-results" class="ac-results"></div>
-        </div>
-        <div id="q-picked" class="ac-picked" style="display:none;margin:0 2px 10px;"></div>
-
-        <input type="number" name="quantity" id="q-qty" class="input-t" placeholder="수량" required min="1" style="margin-bottom:12px;">
-        <!-- 어느 버튼을 눌렀는지 여기에 담김 (Enter 오작동 방지) -->
-        <input type="hidden" name="order_type" id="q-type">
-        <div style="display:flex;gap:10px;">
-            <button type="button" onclick="submitQuick('sell')" class="btn-t btn-blue-t btn-block">매도</button>
-            <button type="button" onclick="submitQuick('buy')" class="btn-t btn-red-t btn-block">매수</button>
-        </div>
-    </form>
+<!-- 내 계좌 위젯(끌어서 순서 변경 · 세로 크기조절): stock_detail.php 대시보드와 같은 방식 -->
+<div class="dv-bar" style="margin-top:4px;">
+    <span class="section-title" style="margin:0;">내 계좌</span>
+    <div class="dv-tools" id="dv-tools">
+        <span class="dv-hint"><svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="4" r="1.3"/><circle cx="11" cy="4" r="1.3"/><circle cx="5" cy="8" r="1.3"/><circle cx="11" cy="8" r="1.3"/><circle cx="5" cy="12" r="1.3"/><circle cx="11" cy="12" r="1.3"/></svg> 끌어서 순서 변경 · 아래로 늘려서 더보기</span>
+        <button class="dv-reset" onclick="resetTradeLayout()">배치 초기화</button>
+    </div>
 </div>
 
-<!-- 보유 종목 -->
-<div class="section-title">보유 종목</div>
-<?php if (!$holdings): ?>
-    <div class="card-t muted" style="text-align:center;font-size:14px;">보유 중인 종목이 없습니다</div>
-<?php else: ?>
-    <div class="stock-list">
-        <?php foreach ($holdings as $h):
-            $profit = $h['current_price'] ? ($h['current_price'] - $h['avg_price']) * $h['quantity'] : null;
-            $rate = ($h['current_price'] && $h['avg_price']) ? ($h['current_price'] - $h['avg_price']) / $h['avg_price'] * 100 : null;
-            $cls = $profit > 0 ? 'up' : ($profit < 0 ? 'down' : 'muted');
-        ?>
-            <a class="stock-row" href="stock_detail.php?code=<?= $h['stock_code'] ?>"
-                data-code="<?= $h['stock_code'] ?>" data-qty="<?= (int) $h['quantity'] ?>" data-avg="<?= (float) $h['avg_price'] ?>">
-                <div class="stock-logo"><?= mb_substr($h['stock_name'], 0, 1) ?></div>
-                <div class="stock-name">
-                    <div class="nm"><?= htmlspecialchars($h['stock_name']) ?></div>
-                    <div class="cd"><?= number_format($h['quantity']) ?>주 · 평단 <?= number_format($h['avg_price']) ?>원</div>
-                </div>
-                <div class="stock-price">
-                    <div class="pr hold-cur"><?= $h['current_price'] ? number_format($h['current_price']) . '원' : '-' ?></div>
-                    <div class="rt hold-pl <?= $cls ?>">
-                        <?= $profit !== null ? ($profit > 0 ? '+' : '') . number_format($profit) . '원' : '-' ?>
-                        <?= $rate !== null ? ' (' . ($rate > 0 ? '+' : '') . number_format($rate, 2) . '%)' : '' ?>
+<div id="trade-grid" class="grid-stack">
+    <!-- 보유 종목 -->
+    <div class="grid-stack-item" gs-id="holdings" gs-w="1" gs-h="6" gs-min-h="3">
+        <div class="grid-stack-item-content widget" data-w="holdings">
+            <div class="widget-h"><span class="wt">보유 종목</span><span class="drag-handle" title="끌어서 이동"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="4" r="1.4"/><circle cx="11" cy="4" r="1.4"/><circle cx="5" cy="8" r="1.4"/><circle cx="11" cy="8" r="1.4"/><circle cx="5" cy="12" r="1.4"/><circle cx="11" cy="12" r="1.4"/></svg></span></div>
+            <?php if (!$holdings): ?>
+                <div class="muted" style="text-align:center;font-size:14px;padding:30px 0;">보유 중인 종목이 없습니다</div>
+            <?php else: ?>
+                <div class="tick-scroll">
+                    <div class="stock-list">
+                        <?php foreach ($holdings as $h):
+                            $profit = $h['current_price'] ? ($h['current_price'] - $h['avg_price']) * $h['quantity'] : null;
+                            $rate = ($h['current_price'] && $h['avg_price']) ? ($h['current_price'] - $h['avg_price']) / $h['avg_price'] * 100 : null;
+                            $cls = $profit > 0 ? 'up' : ($profit < 0 ? 'down' : 'muted');
+                        ?>
+                            <a class="stock-row" href="stock_detail.php?code=<?= $h['stock_code'] ?>"
+                                data-code="<?= $h['stock_code'] ?>" data-qty="<?= (int) $h['quantity'] ?>" data-avg="<?= (float) $h['avg_price'] ?>">
+                                <div class="stock-logo"><?= mb_substr($h['stock_name'], 0, 1) ?></div>
+                                <div class="stock-name">
+                                    <div class="nm"><?= htmlspecialchars($h['stock_name']) ?></div>
+                                    <div class="cd"><?= number_format($h['quantity']) ?>주 · 평단 <?= number_format($h['avg_price']) ?>원</div>
+                                </div>
+                                <div class="stock-price">
+                                    <div class="pr hold-cur"><?= $h['current_price'] ? number_format($h['current_price']) . '원' : '-' ?></div>
+                                    <div class="rt hold-pl <?= $cls ?>">
+                                        <?= $profit !== null ? ($profit > 0 ? '+' : '') . number_format($profit) . '원' : '-' ?>
+                                        <?= $rate !== null ? ' (' . ($rate > 0 ? '+' : '') . number_format($rate, 2) . '%)' : '' ?>
+                                    </div>
+                                </div>
+                            </a>
+                        <?php endforeach; ?>
                     </div>
                 </div>
-            </a>
-        <?php endforeach; ?>
+            <?php endif; ?>
+        </div>
     </div>
-<?php endif; ?>
 
-<!-- 주문 내역 -->
-<div class="section-title">주문 내역</div>
-<?php if (!$orders): ?>
-    <div class="card-t muted" style="text-align:center;font-size:14px;">아직 주문 내역이 없습니다</div>
-<?php else: ?>
-    <div class="stock-list">
-        <?php foreach ($orders as $o):
-            $buy = $o['order_type'] === 'buy';
-        ?>
-            <div class="stock-row" style="cursor:default;">
-                <div class="stock-logo" style="background:<?= $buy ? '#fdecee' : '#e8f3ff' ?>;color:<?= $buy ? 'var(--up)' : 'var(--down)' ?>;">
-                    <?= $buy ? '매수' : '매도' ?>
+    <!-- 주문 내역 -->
+    <div class="grid-stack-item" gs-id="orders" gs-w="1" gs-h="6" gs-min-h="3">
+        <div class="grid-stack-item-content widget" data-w="orders">
+            <div class="widget-h"><span class="wt">주문 내역</span><span class="drag-handle" title="끌어서 이동"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="4" r="1.4"/><circle cx="11" cy="4" r="1.4"/><circle cx="5" cy="8" r="1.4"/><circle cx="11" cy="8" r="1.4"/><circle cx="5" cy="12" r="1.4"/><circle cx="11" cy="12" r="1.4"/></svg></span></div>
+            <?php if (!$orders): ?>
+                <div class="muted" style="text-align:center;font-size:14px;padding:30px 0;">아직 주문 내역이 없습니다</div>
+            <?php else: ?>
+                <div class="tick-scroll">
+                    <div class="stock-list">
+                        <?php foreach ($orders as $o):
+                            $buy = $o['order_type'] === 'buy';
+                        ?>
+                            <div class="stock-row" style="cursor:default;">
+                                <div class="stock-logo" style="background:<?= $buy ? '#fdecee' : '#e8f3ff' ?>;color:<?= $buy ? 'var(--up)' : 'var(--down)' ?>;">
+                                    <?= $buy ? '매수' : '매도' ?>
+                                </div>
+                                <div class="stock-name">
+                                    <div class="nm"><?= htmlspecialchars($o['stock_name']) ?></div>
+                                    <div class="cd"><?= $o['created_at'] ?></div>
+                                </div>
+                                <div class="stock-price">
+                                    <div class="pr"><?= number_format($o['total_amount']) ?>원</div>
+                                    <div class="rt muted"><?= number_format($o['quantity']) ?>주 · <?= number_format($o['price']) ?>원</div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
                 </div>
-                <div class="stock-name">
-                    <div class="nm"><?= htmlspecialchars($o['stock_name']) ?></div>
-                    <div class="cd"><?= $o['created_at'] ?></div>
-                </div>
-                <div class="stock-price">
-                    <div class="pr"><?= number_format($o['total_amount']) ?>원</div>
-                    <div class="rt muted"><?= number_format($o['quantity']) ?>주 · <?= number_format($o['price']) ?>원</div>
-                </div>
-            </div>
-        <?php endforeach; ?>
+            <?php endif; ?>
+        </div>
     </div>
-<?php endif; ?>
+</div>
 
 <script>
-    const qSearch = document.getElementById('q-search');
-    const qCode = document.getElementById('q-code');
-    const qResults = document.getElementById('q-results');
-    const qPicked = document.getElementById('q-picked');
-    let qTimer = null;
+    // ---------- 내 계좌 위젯 (gridstack: 이동 + 세로 리사이즈) ----------
+    // stock_detail.php의 위젯 대시보드와 같은 방식, 저장 키만 이 페이지 전용으로 분리.
+    const TRADE_LAYOUT_KEY = 'moa_trade_layout_v1';
+    const tradeGrid = GridStack.init({
+        column: 1,
+        cellHeight: 60,
+        margin: 10,
+        float: false,
+        handle: '.drag-handle',
+        resizable: { handles: 's' },   // 좁은 1열 레이아웃이라 세로로만 크기조절
+    }, document.getElementById('trade-grid'));
 
-    // 종목명 입력 → 검색 → 드롭다운
-    qSearch.addEventListener('input', () => {
-        qCode.value = '';                 // 다시 입력하면 이전 선택 해제
-        qPicked.style.display = 'none';
-        clearTimeout(qTimer);
-        const kw = qSearch.value.trim();
-        if (!kw) { qResults.style.display = 'none'; qResults.innerHTML = ''; return; }
+    function saveTradeLayout() {
+        try { localStorage.setItem(TRADE_LAYOUT_KEY, JSON.stringify(tradeGrid.save(false))); } catch (e) {}
+    }
+    (function restoreTradeLayout() {
+        let saved;
+        try { saved = JSON.parse(localStorage.getItem(TRADE_LAYOUT_KEY)); } catch { saved = null; }
+        if (Array.isArray(saved) && saved.length) tradeGrid.load(saved);
+    })();
+    tradeGrid.on('change', saveTradeLayout);
+    tradeGrid.on('resizestop', saveTradeLayout);
 
-        qTimer = setTimeout(async () => {
-            const res = await fetch('watchlist_search.php?keyword=' + encodeURIComponent(kw));
-            const stocks = await res.json();
-            if (!stocks.length) { qResults.style.display = 'none'; return; }
-
-            qResults.style.display = 'block';
-            qResults.innerHTML = stocks.map(s => `
-                <div class="ac-item" data-code="${s.stock_code}" data-name="${s.stock_name}">
-                    <span class="anm">${s.stock_name}</span>
-                    <span class="acd">${s.stock_code} · ${s.market ?? ''}</span>
-                </div>`).join('');
-
-            qResults.querySelectorAll('.ac-item').forEach(item => {
-                item.addEventListener('click', () => {
-                    qCode.value = item.dataset.code;              // 코드 자동 입력!
-                    qSearch.value = item.dataset.name;
-                    qPicked.textContent = `✓ ${item.dataset.name} (${item.dataset.code}) 선택됨`;
-                    qPicked.style.display = 'block';
-                    qResults.style.display = 'none';
-                });
-            });
-        }, 250);
-    });
-
-    // 바깥 클릭 시 드롭다운 닫기
-    document.addEventListener('click', (e) => {
-        if (!qSearch.contains(e.target) && !qResults.contains(e.target)) qResults.style.display = 'none';
-    });
-
-    // 매수/매도 버튼 클릭 시에만 주문 (Enter로는 제출되지 않음)
-    function submitQuick(type) {
-        let code = qCode.value;
-        // 목록에서 안 골랐어도, 6자리 숫자 코드를 직접 쳤으면 그대로 인정
-        if (!code) {
-            const v = qSearch.value.trim();
-            if (/^\d{6}$/.test(v)) code = v;
-        }
-        if (!code) { alert('종목명을 검색해서 목록에서 선택해주세요.'); return; }
-        const qty = parseInt(document.getElementById('q-qty').value);
-        if (!qty || qty < 1) { alert('수량을 입력해주세요.'); return; }
-
-        qCode.value = code;
-        document.getElementById('q-type').value = type;   // buy / sell 확정
-        const form = document.getElementById('trade-form');
-        form.querySelectorAll('button').forEach(b => b.disabled = true);
-        form.submit();
+    function resetTradeLayout() {
+        localStorage.removeItem(TRADE_LAYOUT_KEY);
+        location.reload();
     }
 
     // ---------------------------------------------
@@ -216,7 +185,7 @@ include 'includes/header.php';
         if (ta) ta.textContent = num(cashBalance + stockVal) + '원';
     }
 
-    const tradeSocket = new WebSocket('ws://localhost:8080');
+    const tradeSocket = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/');
     tradeSocket.onmessage = (event) => {
         const d = JSON.parse(event.data);
         const h = holdData.find(x => x.code === d.stock_code);

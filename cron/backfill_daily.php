@@ -15,6 +15,8 @@
 //   php cron/backfill_daily.php --years=2        2년치 소급 (최초 1회, 종목당 약 5회 호출)
 //   php cron/backfill_daily.php --years=5        5년치 소급 (오래 걸림)
 //   php cron/backfill_daily.php --code=005930 --years=5   한 종목만
+//   php cron/backfill_daily.php --all            기본/랭킹/관심종목 대신 stock_master 전체 종목 대상
+//   php cron/backfill_daily.php --all --years=2   전체 종목 2년치 소급 (최초 1회, 오래 걸림)
 // -------------------------------------------------------------
 require_once __DIR__ . '/../config/kis_api.php';
 /** @var mysqli $conn */
@@ -22,9 +24,11 @@ require_once __DIR__ . '/../config/kis_api.php';
 $opt = [];
 foreach (array_slice($argv, 1) as $a) {
     if (preg_match('/^--(\w+)=(.+)$/', $a, $m)) $opt[$m[1]] = $m[2];
+    elseif (preg_match('/^--(\w+)$/', $a, $m)) $opt[$m[1]] = true;
 }
 $years   = isset($opt['years']) ? max(0, (float) $opt['years']) : 0;   // 0 = 최근 100영업일만
 $oneCode = $opt['code'] ?? null;
+$allMode = isset($opt['all']);
 
 $SLEEP_US = 300000;   // 호출 간격 0.3초 — KIS 초당 호출 제한 회피 (초과분은 kisQuotationGet이 재시도)
 
@@ -34,9 +38,14 @@ ensureCandle1dTable($conn);
 
 // -------------------------------------------------------------
 // 대상 종목 = 기본종목 ∪ 자동순위종목 ∪ 관심종목  (fetch_price.php 와 같은 집합)
+// --all 이면 stock_master 전체 종목(코스피+코스닥) 대상으로 확장
 // -------------------------------------------------------------
 if ($oneCode) {
     $targets = [$oneCode => null];
+} elseif ($allMode) {
+    $targets = [];
+    $res = mysqli_query($conn, "SELECT stock_code, stock_name FROM stock_master");
+    while ($row = mysqli_fetch_assoc($res)) $targets[$row['stock_code']] = $row['stock_name'];
 } else {
     $defaults   = require __DIR__ . '/../config/default_stocks.php';
     $rankedFile = __DIR__ . '/../config/ranked_stocks.php';

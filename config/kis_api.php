@@ -437,6 +437,47 @@ function getDailyChart($stockCode, $from, $to)
     return $out;
 }
 
+// =============================================================
+// 지수 일봉 조회 (코스피/코스닥 종합지수)
+// =============================================================
+// indexCode: '0001'=코스피 종합, '1001'=코스닥 종합, '2001'=코스피200
+// getDailyChart(종목)와 동일한 페이징 제약(한 번에 최대 100행)을 가진다.
+// VTS(모의투자) 도메인에서 실호출로 2024년 구간까지 정상 응답 확인함.
+function getIndexDailyChart($indexCode, $from, $to)
+{
+    $r = kisQuotationGet(
+        "/uapi/domestic-stock/v1/quotations/inquire-daily-indexchartprice",
+        "FHKUP03500100",
+        [
+            'FID_COND_MRKT_DIV_CODE' => 'U',        // U = 업종/지수
+            'FID_INPUT_ISCD'         => $indexCode,
+            'FID_INPUT_DATE_1'       => $from,
+            'FID_INPUT_DATE_2'       => $to,
+            'FID_PERIOD_DIV_CODE'    => 'D',
+        ]
+    );
+    if (($r['rt_cd'] ?? '1') !== '0') return [];
+
+    $out = [];
+    foreach ($r['output2'] ?? [] as $o) {
+        $d = $o['stck_bsop_date'] ?? '';
+        if (strlen($d) !== 8) continue;
+        $close = (float) ($o['bstp_nmix_prpr'] ?? 0);
+        if ($close <= 0) continue;
+        $out[] = [
+            'date'        => substr($d, 0, 4) . '-' . substr($d, 4, 2) . '-' . substr($d, 6, 2),
+            'open'        => (float) ($o['bstp_nmix_oprc'] ?? 0),
+            'high'        => (float) ($o['bstp_nmix_hgpr'] ?? 0),
+            'low'         => (float) ($o['bstp_nmix_lwpr'] ?? 0),
+            'close'       => $close,
+            'volume'      => (int) ($o['acml_vol'] ?? 0),
+            'trade_value' => (int) ($o['acml_tr_pbmn'] ?? 0),
+        ];
+    }
+    usort($out, fn($a, $b) => strcmp($a['date'], $b['date']));
+    return $out;
+}
+
 // -----------------------------
 // 해시키 발급 (주문 데이터 위변조 방지용)
 // -----------------------------
