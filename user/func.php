@@ -480,6 +480,54 @@ function getMyOrders($conn, $userId)
     return $orders;
 }
 
+// -----------------------------
+// 특정 종목 내 보유 현황 (주문 패널의 '판매 가능 수량'·평균단가용). 없으면 null
+// -----------------------------
+function getMyHolding($conn, $userId, $stockCode)
+{
+    $stmt = mysqli_prepare($conn, "SELECT quantity, avg_price FROM holdings WHERE user_id = ? AND stock_code = ?");
+    mysqli_stmt_bind_param($stmt, "is", $userId, $stockCode);
+    mysqli_stmt_execute($stmt);
+    $row = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
+    return $row ? ['quantity' => (int) $row['quantity'], 'avg_price' => (float) $row['avg_price']] : null;
+}
+
+// -----------------------------
+// 모의 주문 실행 (시장가) — 페이지 이동형(trade_process.php)과 화면 안 주문(order_api.php)이 함께 쓴다.
+// 검증 규칙을 한 곳에만 두기 위해 분리. 실패하면 Exception(사용자에게 그대로 보여줄 문장).
+// 체결 가격은 항상 '서버가 가진 최신가'다. 브라우저가 보낸 가격은 받지도 않는다(조작 방지).
+// -----------------------------
+function placeMockOrder($conn, $userId, $stockCode, $orderType, $quantity)
+{
+    // 서버측 입력 검증 — 브라우저의 min="1" 같은 건 개발자도구로 우회 가능하므로 여기서 반드시 다시 막는다.
+    // 특히 음수 수량은 totalAmount 가 음수가 되어 '잔고가 늘어나는' 치명적 버그를 만든다.
+    if (!in_array($orderType, ['buy', 'sell'], true)) throw new Exception("잘못된 주문 유형입니다.");
+    if (!preg_match('/^[0-9A-Z]{6}$/', $stockCode))   throw new Exception("잘못된 종목코드입니다.");
+    if ($quantity < 1)                                throw new Exception("수량은 1주 이상이어야 합니다.");
+    if ($quantity > 1000000)                          throw new Exception("한 번에 주문 가능한 수량을 초과했습니다.");
+    if (isMaintenance($conn))                         throw new Exception(maintenanceMsg($conn));
+
+    // DB에 쌓인 최신 가격 사용. 없으면(아직 수집 전 종목) 한투 API로 즉시 조회해서 보강
+    $latest = getSingleStockPrice($conn, $stockCode);
+    if (!$latest) throw new Exception("존재하지 않는 종목입니다.");
+    $price = (int) ($latest['price'] ?? 0);
+    if (!$price) {
+        require_once __DIR__ . '/../config/kis_api.php';
+        try {
+            $price = (int) (fetchAndSaveStockPrice($conn, $stockCode)['price'] ?? 0);
+        } catch (Exception $e) {
+            $price = 0;
+        }
+    }
+    if (!$price) throw new Exception("현재 시세 정보를 가져올 수 없습니다. 잠시 후 다시 시도해주세요.");
+
+    // (한투 실제 모의주문은 보내지 않는다 — 자체 모의투자 DB(accounts/holdings/orders)로만 처리)
+    if ($orderType === 'buy') processBuy($conn, $userId, $stockCode, $quantity, $price);
+    else                      processSell($conn, $userId, $stockCode, $quantity, $price);
+
+    return ['price' => $price, 'quantity' => $quantity, 'total' => $price * $quantity];
+}
+
 
 
 // 특정 종목의 오늘 시세 흐름 (차트용)

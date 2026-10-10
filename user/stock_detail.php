@@ -44,6 +44,13 @@ recordStockView($conn, $stockCode);
 $isFav   = $loggedIn ? isInWatchlist($conn, $_SESSION['user_id'], $stockCode) : false;
 $account = $loggedIn ? getMyAccount($conn, $_SESSION['user_id']) : null;
 $cash    = (int) ($account['cash_balance'] ?? 0);   // 계좌 행이 없는 회원이어도 경고 없이 0원
+$holding = $loggedIn ? getMyHolding($conn, $_SESSION['user_id'], $stockCode) : null;
+
+// 주문은 'DB에 있는 최신가'로 체결된다. 그 가격이 오늘 것이 아니면(실시간 수집 중단 등) 주문 패널에 미리 알려준다.
+$priceAt    = $stock['created_at'] ?? null;                                     // stock_latest.updated_at (KST)
+$todayKst   = (new DateTime('now', new DateTimeZone('Asia/Seoul')))->format('Y-m-d');
+$priceStale = $priceAt && substr($priceAt, 0, 10) !== $todayKst;
+$priceAtTxt = $priceAt ? (int) substr($priceAt, 5, 2) . '월 ' . (int) substr($priceAt, 8, 2) . '일' : '';
 
 // 첫 화면에 바로 보일 가격(DB 최신값). 이후 KIS 시세·실시간이 오면 갱신된다.
 $price  = (int) ($stock['price'] ?? 0);
@@ -171,29 +178,54 @@ include 'includes/header.php';
                 <div id="sd-book"></div>
             </section>
 
-            <!-- 주문 (기능은 다음 단계 — 지금은 기존 주문 처리(trade_process.php)에 그대로 연결) -->
-            <section class="sd-card sd-order" id="order">
+            <!-- 주문 — 시장가로 바로 체결. 화면 이동 없이 order_api.php 로 주문하고 결과만 받아온다 -->
+            <section class="sd-card sd-order" id="order" data-side="buy">
                 <div class="sd-card-h">
-                    <span class="sd-card-t">주문하기</span>
+                    <div class="sd-side-tabs" role="tablist">
+                        <button type="button" class="on" data-side="buy">구매</button>
+                        <button type="button" data-side="sell">판매</button>
+                    </div>
                     <button type="button" class="sd-sheet-close" id="sd-sheet-close" aria-label="닫기">✕</button>
                 </div>
                 <?php if ($loggedIn): ?>
-                    <div class="cash"><span>주문 가능 금액</span><b><?= number_format($cash) ?>원</b></div>
-                    <form id="sd-order-form" action="trade_process.php" method="POST">
-                        <?= csrfField() ?>
-                        <input type="hidden" name="stock_code" value="<?= htmlspecialchars($stockCode) ?>">
-                        <input type="hidden" name="order_type" id="sd-order-type">
-                        <label class="label-t" for="sd-qty">수량</label>
-                        <input type="number" id="sd-qty" name="quantity" class="input-t" min="1" inputmode="numeric" placeholder="몇 주 살까요?">
-                        <div class="est"><span>예상 금액</span><b id="sd-est">0원</b></div>
-                        <div class="sd-order-btns">
-                            <button type="button" class="sd-btn sell" data-order="sell">판매</button>
-                            <button type="button" class="sd-btn buy" data-order="buy">구매</button>
-                        </div>
-                    </form>
+                    <div class="sd-ord-row">
+                        <span class="k">주문 가격</span>
+                        <span class="v"><span class="sd-chip">시장가</span> <b id="ord-price"><?= $price ? number_format($price) . '원' : '—' ?></b></span>
+                    </div>
+
+                    <label class="sd-ord-label" for="sd-qty">수량</label>
+                    <div class="sd-stepper">
+                        <button type="button" data-step="-1" aria-label="1주 빼기">−</button>
+                        <input type="number" id="sd-qty" min="1" step="1" inputmode="numeric" placeholder="수량 입력" autocomplete="off">
+                        <span class="unit">주</span>
+                        <button type="button" data-step="1" aria-label="1주 더하기">+</button>
+                    </div>
+                    <div class="sd-quick">
+                        <button type="button" data-pct="10">10%</button>
+                        <button type="button" data-pct="25">25%</button>
+                        <button type="button" data-pct="50">50%</button>
+                        <button type="button" data-pct="100">최대</button>
+                    </div>
+                    <div class="sd-ord-max" id="ord-max"></div>
+
+                    <div class="sd-ord-box">
+                        <div class="sd-ord-row" data-only="buy"><span class="k">구매 가능 금액</span><span class="v" id="ord-cash"><?= number_format($cash) ?>원</span></div>
+                        <div class="sd-ord-row" data-only="sell"><span class="k">보유 수량</span><span class="v" id="ord-hold">—</span></div>
+                        <div class="sd-ord-row" data-only="sell"><span class="k">평균 단가</span><span class="v" id="ord-avg">—</span></div>
+                        <div class="sd-ord-row total"><span class="k">예상 금액</span><span class="v" id="ord-total">0원</span></div>
+                    </div>
+
+                    <p class="sd-ord-msg" id="ord-msg" role="alert"></p>
+                    <button type="button" class="sd-btn buy sd-ord-submit" id="ord-submit" disabled>구매하기</button>
+
+                    <?php if ($priceStale): ?>
+                        <p class="sd-ord-note warn">⚠️ 실시간 시세가 끊겨 있어요. <b><?= $priceAtTxt ?> 가격</b>으로 체결돼요.</p>
+                    <?php else: ?>
+                        <p class="sd-ord-note">지금 가격(시장가)으로 바로 체결돼요. 모의투자라 실제 돈은 오가지 않아요.</p>
+                    <?php endif; ?>
                 <?php else: ?>
                     <p class="hint">로그인하면 1,000만원 모의자금으로 사고팔 수 있어요.</p>
-                    <a href="login.php" class="sd-btn primary">로그인하고 거래하기</a>
+                    <a href="login.php?next=<?= urlencode('stock_detail.php?code=' . $stockCode) ?>" class="sd-btn primary">로그인하고 거래하기</a>
                 <?php endif; ?>
             </section>
         </aside>
@@ -205,6 +237,21 @@ include 'includes/header.php';
         <button type="button" class="sd-btn buy" data-open-order="buy">구매</button>
     </div>
     <div class="sd-dim" id="sd-dim"></div>
+
+    <!-- 주문 최종 확인 창 -->
+    <div class="sd-modal" id="sd-confirm" role="dialog" aria-modal="true" aria-labelledby="cf-title" hidden>
+        <div class="sd-modal-box">
+            <div class="sd-modal-t" id="cf-title"></div>
+            <div class="sd-ord-row"><span class="k">주문 가격</span><span class="v" id="cf-price"></span></div>
+            <div class="sd-ord-row"><span class="k">수량</span><span class="v" id="cf-qty"></span></div>
+            <div class="sd-ord-row total"><span class="k">예상 금액</span><span class="v" id="cf-total"></span></div>
+            <p class="sd-ord-note">시장가 주문은 체결되는 순간의 가격이라 조금 달라질 수 있어요.</p>
+            <div class="sd-modal-btns">
+                <button type="button" class="sd-btn ghost" id="cf-cancel">취소</button>
+                <button type="button" class="sd-btn buy" id="cf-ok">구매하기</button>
+            </div>
+        </div>
+    </div>
     <div class="sd-conn" id="sd-toast" hidden></div>
 </div>
 
@@ -650,7 +697,7 @@ include 'includes/header.php';
     }
     $('sd-post-form').addEventListener('submit', async e => {
         e.preventDefault();
-        if (!LOGGED) { location.href = 'login.php'; return; }
+        if (!LOGGED) { location.href = 'login.php?next=' + encodeURIComponent('stock_detail.php?code=' + CODE); return; }
         const ta = $('sd-post-input');
         const content = ta.value.trim();
         if (!content) return;
@@ -661,7 +708,7 @@ include 'includes/header.php';
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': CSRF },
                 body: 'stock_code=' + encodeURIComponent(CODE) + '&content=' + encodeURIComponent(content) + '&csrf_token=' + encodeURIComponent(CSRF),
             }).then(res => res.json());
-            if (r.error === 'login') { location.href = 'login.php'; return; }
+            if (r.error === 'login') { location.href = 'login.php?next=' + encodeURIComponent('stock_detail.php?code=' + CODE); return; }
             if (r.error === 'csrf') { toast('보안 토큰이 만료됐어요. 새로고침 후 다시 해 주세요.'); return; }
             if (r.error) { toast('글을 올리지 못했어요.'); return; }
             ta.value = '';
@@ -676,7 +723,7 @@ include 'includes/header.php';
 
     // ================= 관심종목 별 =================
     $('sd-star').addEventListener('click', async function () {
-        if (!LOGGED) { location.href = 'login.php'; return; }
+        if (!LOGGED) { location.href = 'login.php?next=' + encodeURIComponent('stock_detail.php?code=' + CODE); return; }
         const on = this.classList.contains('on');
         this.disabled = true;
         try {
@@ -685,7 +732,7 @@ include 'includes/header.php';
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': CSRF },
                 body: 'stock_code=' + encodeURIComponent(CODE) + '&csrf_token=' + encodeURIComponent(CSRF),
             });
-            if (res.status === 401) { location.href = 'login.php'; return; }
+            if (res.status === 401) { location.href = 'login.php?next=' + encodeURIComponent('stock_detail.php?code=' + CODE); return; }
             if (!res.ok) throw new Error('HTTP ' + res.status);
             // 서버가 '성공'이라고 답한 뒤에만 별을 바꾼다
             this.classList.toggle('on', !on);
@@ -698,30 +745,147 @@ include 'includes/header.php';
     });
 
     // ================= 주문 =================
-    function updateEstimate() {
-        const q = parseInt($('sd-qty')?.value, 10) || 0;
-        if ($('sd-est')) $('sd-est').textContent = won(q * price);
-    }
-    $('sd-qty')?.addEventListener('input', updateEstimate);
-    document.querySelectorAll('[data-order]').forEach(b => b.addEventListener('click', () => {
-        const q = parseInt($('sd-qty').value, 10);
-        if (!q || q < 1) { toast('수량을 입력해 주세요.'); $('sd-qty').focus(); return; }
-        $('sd-order-type').value = b.dataset.order;
-        document.querySelectorAll('[data-order]').forEach(x => x.disabled = true);
-        $('sd-order-form').submit();
-    }));
+    // 시장가 주문: 수량만 고르면 서버가 '서버가 가진 최신가'로 체결한다. 화면 이동 없이 order_api.php 와 JSON 으로 주고받음.
+    let side    = 'buy';
+    let cash    = <?= $cash ?>;
+    let holding = <?= json_encode($holding) ?>;          // {quantity, avg_price} 또는 null
+    let ordering = false;
+    const qtyEl = $('sd-qty');
 
-    // 휴대폰: 하단 버튼 → 주문 시트 열기
+    const maxQty = () => side === 'buy' ? (price > 0 ? Math.floor(cash / price) : 0) : (holding ? holding.quantity : 0);
+    const getQty = () => Math.max(0, parseInt(qtyEl?.value, 10) || 0);
+
+    function setSide(s2) {
+        side = s2;
+        $('order').dataset.side = s2;
+        document.querySelectorAll('.sd-side-tabs button').forEach(b => b.classList.toggle('on', b.dataset.side === s2));
+        if (qtyEl) { qtyEl.value = ''; qtyEl.placeholder = '수량 입력'; }
+        updateEstimate();
+    }
+
+    // 금액·최대수량·버튼 상태를 한 번에 갱신 (가격이 실시간으로 바뀔 때도 이 함수가 불린다)
+    function updateEstimate() {
+        if (!qtyEl) return;
+        const q = getQty(), max = maxQty();
+        $('ord-price').textContent = price ? won(price) : '—';
+        $('ord-total').textContent = won(q * price);
+        $('ord-cash').textContent = won(cash);
+        $('ord-hold').textContent = holding ? num(holding.quantity) + '주' : '0주';
+        if (holding) {
+            const r = pct(price, holding.avg_price);
+            $('ord-avg').innerHTML = `${won(holding.avg_price)} <small class="${dir(price, holding.avg_price)}">(${sign(r)}${r.toFixed(2)}%)</small>`;
+        } else $('ord-avg').textContent = '—';
+
+        $('ord-max').textContent = side === 'buy' ? `최대 ${num(max)}주 살 수 있어요` : `최대 ${num(max)}주 팔 수 있어요`;
+
+        // 왜 못 누르는지 버튼 위에 한 줄로 알려준다
+        let msg = '';
+        if (!price) msg = '가격 정보가 없어서 지금은 주문할 수 없어요.';
+        else if (side === 'sell' && !max) msg = '보유한 주식이 없어요.';
+        else if (side === 'buy' && !max) msg = '구매 가능 금액이 부족해요.';
+        else if (q > max) msg = side === 'buy' ? `구매 가능 금액이 부족해요. (최대 ${num(max)}주)` : `보유 수량보다 많아요. (최대 ${num(max)}주)`;
+        $('ord-msg').textContent = msg;
+
+        const btn = $('ord-submit');
+        btn.textContent = side === 'buy' ? '구매하기' : '판매하기';
+        btn.className = 'sd-btn sd-ord-submit ' + side;
+        btn.disabled = ordering || !q || !!msg;
+    }
+
+    if (qtyEl) {
+        qtyEl.addEventListener('input', updateEstimate);
+        document.querySelectorAll('.sd-side-tabs button').forEach(b => b.addEventListener('click', () => setSide(b.dataset.side)));
+        document.querySelectorAll('[data-step]').forEach(b => b.addEventListener('click', () => {
+            qtyEl.value = Math.max(0, getQty() + Number(b.dataset.step)) || '';
+            updateEstimate();
+        }));
+        document.querySelectorAll('[data-pct]').forEach(b => b.addEventListener('click', () => {
+            const n = Math.floor(maxQty() * Number(b.dataset.pct) / 100);
+            qtyEl.value = n || '';
+            if (!n) toast(side === 'buy' ? '구매 가능 금액이 부족해요.' : '보유한 주식이 없어요.');
+            updateEstimate();
+        }));
+        qtyEl.addEventListener('keydown', e => { if (e.key === 'Enter' && !$('ord-submit').disabled) openConfirm(); });
+        $('ord-submit').addEventListener('click', openConfirm);
+    } else {
+        // 비로그인: 탭은 바꿔 보여주기만
+        document.querySelectorAll('.sd-side-tabs button').forEach(b => b.addEventListener('click', () => {
+            $('order').dataset.side = b.dataset.side;
+            document.querySelectorAll('.sd-side-tabs button').forEach(x => x.classList.toggle('on', x === b));
+        }));
+    }
+
+    // --- 최종 확인 창 ---
+    const STOCK_NAME = <?= json_encode($stock['stock_name']) ?>;
+    function openConfirm() {
+        const q = getQty();
+        if (!q) return;
+        const verb = side === 'buy' ? '구매' : '판매';
+        $('cf-title').textContent = `${STOCK_NAME} ${num(q)}주 ${verb}할까요?`;
+        $('cf-price').textContent = '시장가 (약 ' + won(price) + ')';
+        $('cf-qty').textContent = num(q) + '주';
+        $('cf-total').textContent = '약 ' + won(q * price);
+        $('cf-ok').textContent = verb + '하기';
+        $('cf-ok').className = 'sd-btn ' + side;
+        $('sd-confirm').hidden = false;
+        $('cf-ok').focus();
+    }
+    const closeConfirm = () => { $('sd-confirm').hidden = true; };
+    $('cf-cancel').addEventListener('click', closeConfirm);
+    $('sd-confirm').addEventListener('click', e => { if (e.target.id === 'sd-confirm') closeConfirm(); });
+    $('cf-ok').addEventListener('click', submitOrder);
+
+    async function submitOrder() {
+        if (ordering) return;                       // 두 번 눌러도 주문은 한 번만
+        ordering = true;
+        const q = getQty(), s2 = side;
+        $('cf-ok').disabled = true; $('cf-ok').textContent = '주문하는 중…';
+        updateEstimate();
+        try {
+            const res = await fetch('order_api.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': CSRF },
+                body: new URLSearchParams({ stock_code: CODE, order_type: s2, quantity: q, csrf_token: CSRF }),
+            });
+            let r = {};
+            try { r = await res.json(); } catch (e) { /* 서버가 JSON 이 아닌 걸 줬다 → 아래에서 실패 처리 */ }
+            if (r.error === 'login') { location.href = 'login.php?next=' + encodeURIComponent('stock_detail.php?code=' + CODE); return; }
+            if (r.error === 'csrf')  throw new Error('보안 토큰이 만료됐어요. 새로고침 후 다시 해 주세요.');
+            if (!res.ok || !r.success) throw new Error(r.error || '주문에 실패했어요. 잠시 후 다시 해 주세요.');
+
+            cash = r.cash_balance;
+            holding = r.holding;
+            closeConfirm();
+            closeSheet();
+            qtyEl.value = '';
+            toast(`✅ ${num(r.quantity)}주 ${s2 === 'buy' ? '구매' : '판매'} 완료 · ${won(r.price)}에 체결 · 총 ${won(r.total)}`, 3500);
+        } catch (e) {
+            closeConfirm();
+            $('ord-msg').textContent = e.message;
+            toast(e.message, 3500);
+        } finally {
+            ordering = false;
+            $('cf-ok').disabled = false;
+            updateEstimate();
+        }
+    }
+
+    // 휴대폰: 하단 [판매][구매] → 그 방향으로 주문 시트 열기
     const isMobile = () => window.matchMedia('(max-width: 900px)').matches;
     function openSheet() {
         $('order').classList.add('open'); $('sd-dim').classList.add('open');
-        setTimeout(() => $('sd-qty')?.focus(), 250);
+        setTimeout(() => qtyEl?.focus(), 250);
     }
     function closeSheet() { $('order').classList.remove('open'); $('sd-dim').classList.remove('open'); }
-    document.querySelectorAll('[data-open-order]').forEach(b => b.addEventListener('click', openSheet));
+    document.querySelectorAll('[data-open-order]').forEach(b => b.addEventListener('click', () => {
+        if (qtyEl) setSide(b.dataset.openOrder);
+        else { $('order').dataset.side = b.dataset.openOrder; document.querySelectorAll('.sd-side-tabs button').forEach(x => x.classList.toggle('on', x.dataset.side === b.dataset.openOrder)); }
+        openSheet();
+    }));
     $('sd-dim').addEventListener('click', closeSheet);
     $('sd-sheet-close').addEventListener('click', closeSheet);
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheet(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') { if (!$('sd-confirm').hidden) closeConfirm(); else closeSheet(); } });
+    updateEstimate();
 
     // 자동매매 화면의 '일반매매'(…#order)로 들어오면 주문 패널을 바로 보여준다
     if (location.hash === '#order') {
