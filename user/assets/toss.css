@@ -1058,3 +1058,127 @@ body {
     .acct-kpis { grid-template-columns: 1fr 1fr; }
     .acct-kpi:last-child { grid-column: span 2; }
 }
+
+/* =========================================================
+   섹션23. 메인(홈) v2 — 토스형
+   - 클래스 이름은 전부 hm- 로 시작
+   - 위: 지수 카드(코스피·코스닥 + 작은 차트)
+   - 아래: 왼쪽 [실시간 순위 표] / 오른쪽 [내 투자 · 관심종목] (휴대폰은 위아래로)
+   ========================================================= */
+.hm { font-variant-numeric: tabular-nums; }
+.hm .up   { color: var(--up); }
+.hm .down { color: var(--down); }
+.hm .flat { color: var(--flat); }
+
+.hm-head { display: flex; align-items: center; gap: var(--sp-2); margin: var(--sp-2) 0 var(--sp-4); flex-wrap: wrap; }
+.hm-head h1 { font-size: var(--fs-xl); font-weight: 700; margin: 0; }
+.hm-status { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-sm); font-weight: 600; color: var(--text-sub);
+             background: var(--card); border-radius: 999px; padding: 5px var(--sp-3); box-shadow: var(--shadow); }
+.hm-status i { width: 7px; height: 7px; border-radius: 50%; background: #c9d2dc; }
+.hm-status.open i { background: #12b76a; animation: blip 1.6s infinite; }
+.hm-asof { font-size: var(--fs-xs); color: #b45309; background: #fff7e6; border-radius: 6px; padding: 3px var(--sp-2); font-weight: 600; }
+
+/* ---------- 지수 카드 ---------- */
+.hm-indices { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--sp-3); margin-bottom: var(--sp-6); }
+.hm-index { display: flex; align-items: center; gap: var(--sp-3); background: var(--card); border-radius: var(--radius-lg); box-shadow: var(--shadow);
+            padding: var(--sp-4) var(--sp-5); min-width: 0; }
+.hm-index .info { flex: 1; min-width: 0; }
+.hm-index .nm { font-size: var(--fs-sm); color: var(--text-sub); font-weight: 600; }
+.hm-index .v { font-size: var(--fs-xl); font-weight: 700; margin-top: 2px; letter-spacing: -0.02em; }
+.hm-index .c { font-size: var(--fs-sm); font-weight: 600; margin-top: 2px; white-space: nowrap; }
+.hm-spark { flex: none; width: 96px; height: 44px; }
+
+/* ---------- 2단 ---------- */
+.hm-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--sp-5); align-items: start; }
+.hm-side { display: flex; flex-direction: column; gap: var(--sp-4); position: sticky; top: 80px; }
+.hm-card { background: var(--card); border-radius: var(--radius-lg); box-shadow: var(--shadow); padding: var(--sp-5); min-width: 0; }
+.hm-card-h { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+.hm-card-t { font-size: var(--fs-lg); font-weight: 700; }
+.hm-card-t small { color: var(--primary); font-size: var(--fs-lg); margin-left: 2px; }
+.hm-time { font-size: var(--fs-xs); color: var(--text-sub); font-weight: 500; }
+.hm-link { font-size: var(--fs-sm); font-weight: 600; color: var(--text-sub); text-decoration: none; }
+.hm-link:hover { color: var(--text); }
+
+/* 순위 탭 */
+.hm-tabs { display: flex; gap: var(--sp-1); overflow-x: auto; margin: 0 calc(var(--sp-1) * -1) var(--sp-3); padding: 0 var(--sp-1); scrollbar-width: none; }
+.hm-tabs::-webkit-scrollbar { display: none; }
+.hm-tabs button { flex: none; border: none; background: var(--fill); height: 36px; padding: 0 var(--sp-4); border-radius: 999px; font-family: inherit;
+                  font-size: var(--fs-sm); font-weight: 600; color: #4e5968; cursor: pointer; transition: background .15s, color .15s; }
+.hm-tabs button:hover { background: #e5e8eb; }
+.hm-tabs button.on { background: var(--text); color: #fff; }
+
+/* 순위 표 (PC: 순위 · 종목 · 현재가 · 등락률 · 거래대금) */
+.hm-th, .hm-tr { display: grid; grid-template-columns: 36px minmax(0, 1fr) 120px 96px 120px; align-items: center; gap: var(--sp-2); }
+.hm-th { font-size: var(--fs-xs); color: var(--text-sub); font-weight: 600; padding: 0 var(--sp-2) var(--sp-2); margin: 0 calc(var(--sp-2) * -1); border-bottom: 1px solid var(--line); }   /* 행(.hm-tr)과 같은 좌우 보정 → 칸이 정확히 맞음 */
+.hm-th span:nth-child(n+3) { text-align: right; }
+.hm-th span:nth-child(3) { padding-right: 4px; }   /* 아래 가격 칸의 안쪽 여백과 끝을 맞춤 */
+.hm-tr { padding: 10px var(--sp-2); margin: 0 calc(var(--sp-2) * -1); border-radius: var(--radius-md); text-decoration: none; color: inherit;
+         transition: background .12s; min-height: 60px; }
+.hm-tr:hover { background: #f9fafb; }
+.hm-rank { font-size: var(--fs-md); font-weight: 700; color: var(--text-sub); text-align: center; }
+.hm-rank.top { color: var(--primary); }
+.hm-stock { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; }
+.hm-logo { position: relative; width: 36px; height: 36px; border-radius: 50%; flex: none; overflow: hidden; display: inline-flex;
+           align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: var(--fs-sm); }
+.hm-logo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #fff; opacity: 0; transition: opacity .2s; }
+.hm-logo img.ok { opacity: 1; }   /* 그림이 다 오기 전엔 숨겨서 글자 로고가 보이게 (빈 흰 동그라미 방지) */
+.hm-stock .nm { font-size: var(--fs-md); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hm-stock .sub { font-size: var(--fs-xs); color: var(--text-sub); margin-top: 1px; }
+.hm-px { text-align: right; font-size: var(--fs-md); font-weight: 600; border-radius: 6px; padding: 2px 4px; }
+.hm-rt { text-align: right; font-size: var(--fs-md); font-weight: 600; }
+.hm-ex { text-align: right; font-size: var(--fs-sm); color: var(--text-sub); }
+.hm-more { width: 100%; height: 44px; margin-top: var(--sp-3); border: none; background: var(--fill); border-radius: var(--radius-md);
+           font-family: inherit; font-size: var(--fs-md); font-weight: 600; color: #4e5968; cursor: pointer; }
+.hm-more:hover { background: #e5e8eb; }
+
+/* 오른쪽: 내 투자 */
+.hm-my .k { font-size: var(--fs-sm); color: var(--text-sub); font-weight: 600; }
+.hm-my .total { font-size: var(--fs-xl); font-weight: 700; margin-top: var(--sp-1); }
+.hm-my .pl { font-size: var(--fs-sm); font-weight: 600; margin-top: 2px; }
+.hm-my-rows { margin-top: var(--sp-4); border-top: 1px solid var(--line); padding-top: var(--sp-3); }
+.hm-my-rows div { display: flex; justify-content: space-between; font-size: var(--fs-sm); padding: 4px 0; }
+.hm-my-rows span { color: var(--text-sub); }
+.hm-my-rows b { font-weight: 600; }
+.hm-cta { background: linear-gradient(135deg, #3182f6, #1b64da); color: #fff; }
+.hm-cta .t { font-size: var(--fs-lg); font-weight: 700; line-height: 1.4; }
+.hm-cta .d { font-size: var(--fs-sm); opacity: .85; margin-top: var(--sp-1); line-height: 1.5; }
+.hm-cta a { display: flex; align-items: center; justify-content: center; height: 44px; margin-top: var(--sp-4); border-radius: var(--radius-md);
+            background: #fff; color: var(--primary); font-weight: 700; font-size: var(--fs-md); text-decoration: none; }
+
+/* 오른쪽: 관심종목 (간단 행) */
+.hm-wrow { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-2) 0; text-decoration: none; color: inherit; }
+.hm-wrow .hm-logo { width: 32px; height: 32px; }
+.hm-wrow .nm { flex: 1; min-width: 0; font-size: var(--fs-md); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hm-wrow .r { text-align: right; flex: none; }
+.hm-wrow .r .p { font-size: var(--fs-sm); font-weight: 600; border-radius: 6px; padding: 0 3px; }
+.hm-wrow .r .c { font-size: var(--fs-xs); font-weight: 600; }
+.hm-empty { text-align: center; padding: var(--sp-6) var(--sp-2); font-size: var(--fs-sm); color: var(--text-sub); line-height: 1.6; }
+.hm-empty b { display: block; color: var(--text); font-size: var(--fs-md); margin-bottom: 2px; }
+
+@media (max-width: 1100px) {
+    .hm-th, .hm-tr { grid-template-columns: 32px minmax(0, 1fr) 110px 88px; }
+    .hm-th span:last-child, .hm-ex { display: none; }
+}
+@media (max-width: 900px) {
+    /* 휴대폰: 두 칸을 풀어서 [내 투자 → 실시간 순위 → 관심종목] 순서로 */
+    .hm-layout { display: flex; flex-direction: column; align-items: stretch; gap: var(--sp-4); }
+    .hm-main, .hm-side { display: contents; }
+    .hm-my { order: 0; }
+    .hm-rankcard { order: 1; }
+    .hm-watch { order: 2; }
+    .hm-card { padding: var(--sp-4); }
+}
+@media (max-width: 560px) {
+    .hm-indices { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2); }
+    .hm-index { flex-direction: column; align-items: stretch; padding: var(--sp-3) var(--sp-4); }
+    .hm-index .v { font-size: var(--fs-lg); }
+    .hm-spark { width: 100%; height: 32px; }
+    /* 순위: 순위 · 종목 · (현재가 위 / 등락률 아래) */
+    .hm-th { display: none; }
+    .hm-tr { grid-template-columns: 26px minmax(0, 1fr) auto; grid-template-rows: auto auto; row-gap: 0; }
+    .hm-tr .hm-rank { grid-row: span 2; }
+    .hm-tr .hm-stock { grid-row: span 2; }
+    .hm-tr .hm-px { grid-column: 3; padding: 0; }
+    .hm-tr .hm-rt { grid-column: 3; font-size: var(--fs-sm); }
+    .hm-logo { width: 32px; height: 32px; }
+}

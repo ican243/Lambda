@@ -198,7 +198,7 @@ function getPopularStocks($conn, $limit = 100)
         SELECT sl.stock_code,
                COALESCE(sm.stock_name, sl.stock_name, sl.stock_code) AS stock_name,
                sm.market, sl.price, sl.change_price, sl.change_rate, sl.volume,
-               sl.trade_value
+               sl.trade_value, sl.updated_at
         FROM stock_latest sl
         LEFT JOIN stock_master sm ON sm.stock_code = sl.stock_code
         WHERE sl.price > 0
@@ -255,6 +255,37 @@ function recordStockView($conn, $stockCode)
 // 시세가 있는(stock_latest) 종목만 → 가격까지 함께 렌더 가능.
 // 아직 조회 데이터가 없으면 빈 배열 반환(프론트에서 급상승으로 폴백).
 // -----------------------------
+// -----------------------------
+// 홈 상단 지수 카드용: 코스피/코스닥 최근 종가·전일 대비·최근 N일 종가(작은 차트)
+// index_candles_1d 는 cron/backfill_index.php 가 매일 채운다. 데이터 없으면 빈 배열.
+// -----------------------------
+function getIndexSummary($conn, $days = 30)
+{
+    $res = @mysqli_query($conn, "SELECT index_code, index_name, d, close_p FROM index_candles_1d
+                                 WHERE d >= DATE_SUB(CURDATE(), INTERVAL 120 DAY) ORDER BY index_code, d");
+    if (!$res) return [];
+    $by = [];
+    while ($r = mysqli_fetch_assoc($res)) $by[$r['index_code']][] = $r;
+    $out = [];
+    foreach ($by as $code => $rows) {
+        $rows = array_slice($rows, -$days);
+        $n = count($rows);
+        if ($n < 2) continue;
+        $last = (float) $rows[$n - 1]['close_p'];
+        $prev = (float) $rows[$n - 2]['close_p'];
+        $out[] = [
+            'code'   => (string) $code,   // '1001' 같은 숫자 모양 키는 PHP가 정수로 바꿔버려서 문자로 고정
+            'name'   => $rows[$n - 1]['index_name'],
+            'date'   => $rows[$n - 1]['d'],
+            'close'  => $last,
+            'change' => round($last - $prev, 2),
+            'rate'   => $prev ? round(($last - $prev) / $prev * 100, 2) : 0,
+            'series' => array_map(fn($r) => (float) $r['close_p'], $rows),
+        ];
+    }
+    return $out;
+}
+
 function getMostViewedStocks($conn, $limit = 15)
 {
     $limit = (int) $limit;
@@ -262,7 +293,7 @@ function getMostViewedStocks($conn, $limit = 15)
         SELECT sl.stock_code,
                COALESCE(sm.stock_name, sl.stock_name, sl.stock_code) AS stock_name,
                sm.market, sl.price, sl.change_price, sl.change_rate, sl.volume,
-               sv.view_count
+               sl.trade_value, sl.updated_at, sv.view_count
         FROM stock_views sv
         JOIN stock_latest sl ON sl.stock_code = sv.stock_code
         LEFT JOIN stock_master sm ON sm.stock_code = sv.stock_code

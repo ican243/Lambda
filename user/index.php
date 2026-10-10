@@ -7,248 +7,302 @@ startUserSession();
 $loggedIn = isLoggedIn();
 
 // 초기 데이터를 서버가 미리 만들어 HTML 안에 심는다 → 첫 화면 왕복 0
-$popular = getPopularStocks($conn, 100);
-$mostViewed = getMostViewedStocks($conn, 15);   // 우측 "지금 많이 봐요"
-$myWatch = $loggedIn ? getMyWatchlistPrices($conn, $_SESSION['user_id']) : [];
+$popular    = getPopularStocks($conn, 100);
+$mostViewed = getMostViewedStocks($conn, 30);
+$indices    = getIndexSummary($conn, 30);
+$myWatch    = $loggedIn ? getMyWatchlistPrices($conn, $_SESSION['user_id']) : [];
+
+// 로그인 사용자의 '내 투자' 요약 (총 자산 = 현금 + 보유주식 평가액)
+$my = null;
+if ($loggedIn) {
+    $cash = (int) getMyAccount($conn, $_SESSION['user_id'])['cash_balance'];
+    $stock = 0; $cost = 0;
+    foreach (getMyHoldings($conn, $_SESSION['user_id']) as $h) {
+        $p = $h['current_price'] ?: $h['avg_price'];
+        $stock += $p * $h['quantity'];
+        $cost  += $h['avg_price'] * $h['quantity'];
+    }
+    $my = ['cash' => $cash, 'stock' => (int) round($stock), 'cost' => (int) round($cost), 'initial' => getInitialCashAmount($conn)];
+}
 
 $pageWide = true;
 include 'includes/header.php';
 ?>
 
-<div class="page-title">실시간 인기 종목</div>
-<p class="page-sub">거래대금이 많은 순서예요. 종목을 눌러 차트를 확인해보세요.</p>
-
-<!-- 시장 요약 스트립 (인기 상위 6종목) -->
-<div class="market-strip" id="market-strip"></div>
-
-<?php if ($loggedIn && $myWatch): ?>
-    <!-- 로그인 사용자의 관심종목 -->
-    <div class="section-title" style="margin-top:0;">내 관심종목</div>
-    <div class="stock-list" id="watch-list" style="margin-bottom:8px;"></div>
-<?php endif; ?>
-
-<div class="dash" id="ranking">
-    <!-- 메인: 인기/급등/급락 순위 -->
-    <div>
-        <div class="tabs">
-            <button data-sort="value" class="on">거래대금</button>
-            <button data-sort="volume">거래량</button>
-            <button data-sort="up">급상승</button>
-            <button data-sort="down">급하락</button>
-        </div>
-        <div class="stock-list" id="main-list"></div>
+<div class="hm">
+    <div class="hm-head">
+        <h1>오늘의 시장</h1>
+        <span class="hm-status" id="hm-status"><i></i><span></span></span>
+        <span class="hm-asof" id="hm-asof" hidden></span>
     </div>
 
-    <!-- 사이드: 실시간 랭킹 -->
-    <aside class="side">
-        <div class="side-head">
-            <span class="t">🔥 지금 많이 봐요</span>
-            <span class="time" id="side-time"></span>
+    <!-- ===== 지수 카드 ===== -->
+    <?php if ($indices): ?>
+        <div class="hm-indices" id="hm-indices"></div>
+    <?php endif; ?>
+
+    <div class="hm-layout">
+        <!-- ===================== 왼쪽: 실시간 순위 ===================== -->
+        <div class="hm-main">
+            <section class="hm-card hm-rankcard" id="ranking">
+                <div class="hm-card-h">
+                    <span class="hm-card-t">실시간 순위</span>
+                    <span class="hm-time" id="hm-time"></span>
+                </div>
+                <div class="hm-tabs" id="hm-tabs" role="tablist">
+                    <button type="button" class="on" data-sort="value">거래대금</button>
+                    <button type="button" data-sort="volume">거래량</button>
+                    <button type="button" data-sort="up">급상승</button>
+                    <button type="button" data-sort="down">급하락</button>
+                    <button type="button" data-sort="views">많이 본</button>
+                </div>
+                <div class="hm-th"><span>순위</span><span>종목</span><span>현재가</span><span>등락률</span><span id="hm-ex-h">거래대금</span></div>
+                <div id="hm-list"></div>
+            </section>
         </div>
-        <div class="stock-list" id="side-list"></div>
-        <p class="side-note" id="side-note"></p>
-    </aside>
+
+        <!-- ===================== 오른쪽 ===================== -->
+        <aside class="hm-side">
+            <?php if ($my): ?>
+                <a class="hm-card hm-my" href="trade.php" style="display:block;text-decoration:none;color:inherit;">
+                    <div class="hm-card-h" style="margin-bottom:0;">
+                        <span class="k">내 총 자산</span>
+                        <span class="hm-link">내 계좌 ›</span>
+                    </div>
+                    <div class="total" id="my-total">—</div>
+                    <div class="pl" id="my-pl">—</div>
+                    <div class="hm-my-rows">
+                        <div><span>주문 가능 현금</span><b id="my-cash">—</b></div>
+                        <div><span>주식 평가금액</span><b id="my-stock">—</b></div>
+                    </div>
+                </a>
+            <?php else: ?>
+                <section class="hm-card hm-cta hm-my">
+                    <div class="t">1,000만원으로<br>모의투자를 시작해 보세요</div>
+                    <div class="d">진짜 시세로 사고팔아 보면서, 실제 돈은 하나도 잃지 않아요.</div>
+                    <a href="login.php">로그인하고 시작하기</a>
+                </section>
+            <?php endif; ?>
+
+            <section class="hm-card hm-watch">
+                <div class="hm-card-h">
+                    <span class="hm-card-t">관심 종목 <small id="watch-count"></small></span>
+                </div>
+                <div id="watch-list"></div>
+            </section>
+        </aside>
+    </div>
 </div>
 
 <script>
-    const isLoggedIn = <?= $loggedIn ? 'true' : 'false' ?>;
-    let stocks = <?= json_encode($popular, JSON_UNESCAPED_UNICODE) ?>;
+(function () {
+    'use strict';
+    const LOGGED  = <?= $loggedIn ? 'true' : 'false' ?>;
+    let stocks     = <?= json_encode($popular, JSON_UNESCAPED_UNICODE) ?>;
     let mostViewed = <?= json_encode($mostViewed, JSON_UNESCAPED_UNICODE) ?>;
-    let myWatch = <?= json_encode($myWatch, JSON_UNESCAPED_UNICODE) ?>;
-    let currentSort = 'value';
+    let myWatch    = <?= json_encode($myWatch, JSON_UNESCAPED_UNICODE) ?>;
+    const indices  = <?= json_encode($indices, JSON_UNESCAPED_UNICODE) ?>;
+    const MY       = <?= json_encode($my) ?>;
 
-    // ---------- 공통 헬퍼 ----------
-    const won = n => Number(n).toLocaleString() + '원';
-    const logoText = name => (name || '?').trim().charAt(0);
-
-    function cls(v) {
-        return v > 0 ? 'up' : (v < 0 ? 'down' : 'muted');
+    const $ = id => document.getElementById(id);
+    const num  = n => Math.round(Number(n) || 0).toLocaleString('ko-KR');
+    const won  = n => num(n) + '원';
+    const sign = n => (n > 0 ? '+' : '');
+    const cls  = n => (n > 0 ? 'up' : (n < 0 ? 'down' : 'flat'));
+    const esc  = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const rateTxt = r => `${sign(r)}${Number(r || 0).toFixed(2)}%`;
+    const kstNow  = () => new Date(Date.now() + 9 * 3600e3);          // getUTC* 로 읽으면 한국 시각
+    function moneyFmt(v) {                                              // 원 → 조/억/만
+        v = Number(v) || 0;
+        const jo = Math.floor(v / 1e12), eok = Math.floor((v % 1e12) / 1e8);
+        if (jo > 0) return jo + '조 ' + num(eok) + '억';
+        if (eok > 0) return num(eok) + '억';
+        return num(Math.floor(v / 1e4)) + '만';
     }
-    // 등락률만: 큰 헤더 등에서 사용
-    function rateText(cp, cr) {
-        return (cp > 0 ? '+' : '') + (cr ?? 0) + '%';
+    const volFmt = v => (v = Number(v) || 0) >= 1e4 ? num(Math.floor(v / 1e4)) + '만 주' : num(v) + '주';
+    function flash(el, up) {
+        if (!el) return;
+        el.classList.remove('sd-flash-up', 'sd-flash-down');
+        void el.offsetWidth;                         // 애니메이션을 처음부터 다시 재생시키는 요령
+        el.classList.add(up ? 'sd-flash-up' : 'sd-flash-down');
     }
-    // 등락 "금액(원) + 비율(%)" 동시 표기 → 초보자용. 예) -12,000원 (-6.88%)
-    function changeText(cp, cr) {
-        cp = Number(cp) || 0;
-        const sign = cp > 0 ? '+' : ''; // 음수/0은 toLocaleString·값 자체에 부호 포함
-        return `${sign}${cp.toLocaleString()}원 (${sign}${cr ?? 0}%)`;
-    }
-    // 종목코드 해시 → 종목별 고유 파스텔 컬러 (실제 로고 없을 때의 시각 포인트)
-    function logoColor(code) {
-        const s = String(code || '');
-        let h = 0;
-        for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-        const hue = h % 360;
-        return {
-            bg: `hsl(${hue} 70% 93%)`,
-            fg: `hsl(${hue} 45% 40%)`
-        };
-    }
-    // 로고 셀: 실제 이미지(assets/logos/{코드}.png) 있으면 표시, 없으면 파스텔 글자로 fallback
-    function logoHTML(s) {
-        const {
-            bg,
-            fg
-        } = logoColor(s.stock_code);
-        return `<div class="stock-logo" style="background:${bg};color:${fg}">
-            <img src="assets/logos/${s.stock_code}.png" alt="" loading="lazy" onerror="this.remove()">
-            <span>${logoText(s.stock_name)}</span>
-        </div>`;
+    function logo(code, name) {
+        let h = 0; for (const ch of String(code)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+        return `<span class="hm-logo" style="background:hsl(${h % 360},62%,62%)"><img src="assets/logos/${esc(code)}.png" alt="" loading="lazy" onload="this.classList.add('ok')" onerror="this.remove()">${esc(String(name || '?').trim().charAt(0))}</span>`;
     }
 
-    // ---------- 정렬 ----------
-    // 거래대금은 실제 trade_value(누적거래대금)로 정렬 → 토스/한투와 순위 일치.
-    // trade_value가 아직 0이면 price*volume 근사로 보조.
-    function tradeValueOf(s) {
-        const tv = Number(s.trade_value) || 0;
-        return tv > 0 ? tv : (Number(s.price) * Number(s.volume));
-    }
+    // ================= 장 상태 · 시세 기준 =================
+    function renderStatus() {
+        const t = kstNow(), day = t.getUTCDay(), m = t.getUTCHours() * 60 + t.getUTCMinutes();
+        let txt, open = false;
+        if (day === 0 || day === 6) txt = '오늘은 휴장일';
+        else if (m < 9 * 60) txt = '장 시작 전 · 9시 개장';
+        else if (m < 15 * 60 + 30) { txt = '장 열림 · 15:30 마감'; open = true; }
+        else txt = '장 마감';
+        $('hm-status').className = 'hm-status' + (open ? ' open' : '');
+        $('hm-status').querySelector('span').textContent = txt;
 
-    function sortStocks(list, mode) {
-        const arr = [...list];
-        if (mode === 'up') arr.sort((a, b) => b.change_rate - a.change_rate);
-        else if (mode === 'down') arr.sort((a, b) => a.change_rate - b.change_rate);
-        else if (mode === 'volume') arr.sort((a, b) => Number(b.volume) - Number(a.volume));
-        else arr.sort((a, b) => tradeValueOf(b) - tradeValueOf(a)); // value(거래대금)
-        return arr;
-    }
-
-    // ---------- 렌더: 순위 행 ----------
-    // opts.badge → 이름 아래 보조문구(예: "1,240명이 봤어요")
-    function rowHTML(s, rank, opts = {}) {
-        const c = cls(s.change_price);
-        const sub = opts.badge ?
-            `<div class="sub-info">${opts.badge}</div>` :
-            `<div class="cd">${s.stock_code}${s.market ? ' · ' + s.market : ''}</div>`;
-        return `
-        <a class="stock-row" href="stock_detail.php?code=${s.stock_code}" data-code="${s.stock_code}">
-            ${rank ? `<div class="rank ${rank <= 3 ? 'top' : ''}">${rank}</div>` : ''}
-            ${logoHTML(s)}
-            <div class="stock-name">
-                <div class="nm">${s.stock_name}</div>
-                ${sub}
-            </div>
-            <div class="stock-price">
-                <div class="pr">${s.price ? won(s.price) : '-'}</div>
-                <div class="rt ${c}">${changeText(s.change_price, s.change_rate)}</div>
-            </div>
-        </a>`;
-    }
-
-    // ---------- 렌더: 우측 "지금 많이 봐요" ----------
-    function renderSide() {
-        const note = document.getElementById('side-note');
-        if (mostViewed && mostViewed.length) {
-            // 실제 조회수 기반
-            document.getElementById('side-list').innerHTML = mostViewed
-                .slice(0, 10)
-                .map((s, i) => rowHTML(s, i + 1, {
-                    badge: `${Number(s.view_count).toLocaleString()}명이 봤어요`
-                })).join('');
-            if (note) note.textContent = '방문자들이 많이 열어본 종목이에요.';
+        // 시세가 오늘 것이 아니면(실시간 수집 중단 등) 기준 시각을 알려준다
+        const latest = stocks.map(s => s.updated_at || '').sort().pop();
+        const today = t.toISOString().slice(0, 10);
+        const asof = $('hm-asof');
+        if (latest && latest.slice(0, 10) < today) {
+            asof.textContent = `${+latest.slice(5, 7)}월 ${+latest.slice(8, 10)}일 ${latest.slice(11, 16)} 시세 기준`;
+            asof.hidden = false;
+            $('hm-time').textContent = '';
         } else {
-            // 조회 데이터가 아직 없으면 급상승 TOP으로 폴백 (좌측 거래대금과 겹치지 않게)
-            const rising = sortStocks(stocks, 'up').slice(0, 10);
-            document.getElementById('side-list').innerHTML =
-                rising.map((s, i) => rowHTML(s, i + 1)).join('');
-            if (note) note.textContent = '아직 조회 데이터가 모이는 중이라 급상승 종목을 보여드려요.';
+            asof.hidden = true;
+            $('hm-time').textContent = `${String(t.getUTCHours()).padStart(2, '0')}:${String(t.getUTCMinutes()).padStart(2, '0')} 기준`;
         }
     }
 
-    // ---------- 렌더: 전체 화면 ----------
-    function renderAll() {
-        // 시장 스트립 (상위 6)
-        const top6 = sortStocks(stocks, 'value').slice(0, 6);
-        document.getElementById('market-strip').innerHTML = top6.map(s => {
-            const c = cls(s.change_price);
-            return `<a class="market-card" href="stock_detail.php?code=${s.stock_code}">
-                <div class="mc-nm">${s.stock_name}</div>
-                <div class="mc-pr">${s.price ? won(s.price) : '-'}</div>
-                <div class="mc-rt ${c}">${changeText(s.change_price, s.change_rate)}</div>
-            </a>`;
+    // ================= 지수 카드 (작은 선 차트 포함) =================
+    function spark(series, color) {
+        const w = 96, h = 44, min = Math.min(...series), max = Math.max(...series), span = max - min || 1;
+        const pts = series.map((v, i) => `${(i / (series.length - 1) * w).toFixed(1)},${(h - 3 - (v - min) / span * (h - 6)).toFixed(1)}`).join(' ');
+        return `<svg class="hm-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">`
+             + `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/></svg>`;
+    }
+    function renderIndices() {
+        const box = $('hm-indices'); if (!box) return;
+        const css = getComputedStyle(document.documentElement);
+        box.innerHTML = indices.map(ix => {
+            const c = cls(ix.change), color = css.getPropertyValue(c === 'up' ? '--up' : c === 'down' ? '--down' : '--flat').trim();
+            return `<div class="hm-index"><div class="info"><div class="nm">${esc(ix.name)}</div>`
+                + `<div class="v">${Number(ix.close).toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>`
+                + `<div class="c ${c}">${sign(ix.change)}${Number(ix.change).toFixed(2)} (${rateTxt(ix.rate)})</div></div>`
+                + spark(ix.series, color) + `</div>`;
         }).join('');
-
-        // 메인 순위 (현재 탭 기준)
-        const sorted = sortStocks(stocks, currentSort);
-        document.getElementById('main-list').innerHTML = sorted.map((s, i) => rowHTML(s, i + 1)).join('');
-
-        // 사이드 = "지금 많이 봐요" (조회수 상위). 아직 조회 데이터가 없으면 급상승으로 폴백.
-        renderSide();
-
-        // 관심종목
-        const wl = document.getElementById('watch-list');
-        if (wl) wl.innerHTML = myWatch.length ?
-            myWatch.map(s => rowHTML(s, 0)).join('') :
-            '<div class="muted" style="padding:20px;text-align:center;font-size:14px;">관심종목을 검색해서 추가해보세요</div>';
-
-        const now = new Date();
-        document.getElementById('side-time').textContent =
-            `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')} 기준`;
     }
 
-    // ---------- 탭 전환 ----------
-    document.querySelectorAll('.tabs button').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('on'));
-            btn.classList.add('on');
-            currentSort = btn.dataset.sort;
-            renderAll();
-        });
+    // ================= 실시간 순위 =================
+    let sortBy = 'value', shown = 20;
+    const tv = s => (Number(s.trade_value) || 0) > 0 ? Number(s.trade_value) : Number(s.price) * Number(s.volume);
+    function sorted() {
+        if (sortBy === 'views') return [...mostViewed];
+        const a = [...stocks];
+        if (sortBy === 'up') a.sort((x, y) => y.change_rate - x.change_rate);
+        else if (sortBy === 'down') a.sort((x, y) => x.change_rate - y.change_rate);
+        else if (sortBy === 'volume') a.sort((x, y) => Number(y.volume) - Number(x.volume));
+        else a.sort((x, y) => tv(y) - tv(x));
+        return a;
+    }
+    function extra(s) {                                   // 마지막 칸: 탭에 따라 다른 정보
+        if (sortBy === 'volume') return volFmt(s.volume);
+        if (sortBy === 'views') return num(s.view_count) + '회';
+        return moneyFmt(tv(s));
+    }
+    function renderList() {
+        $('hm-ex-h').textContent = sortBy === 'volume' ? '거래량' : sortBy === 'views' ? '조회수' : '거래대금';
+        const list = sorted();
+        const box = $('hm-list');
+        if (!list.length) {
+            box.innerHTML = `<div class="hm-empty"><b>${sortBy === 'views' ? '아직 조회 기록이 없어요' : '시세 정보가 없어요'}</b>`
+                + `${sortBy === 'views' ? '종목을 열어 본 사람이 생기면 여기에 모여요.' : '잠시 후 다시 확인해 주세요.'}</div>`;
+            return;
+        }
+        box.innerHTML = list.slice(0, shown).map((s, i) => {
+            const c = cls(Number(s.change_price));
+            return `<a class="hm-tr" href="stock_detail.php?code=${esc(s.stock_code)}" data-code="${esc(s.stock_code)}">`
+                + `<span class="hm-rank${i < 3 ? ' top' : ''}">${i + 1}</span>`
+                + `<span class="hm-stock">${logo(s.stock_code, s.stock_name)}<span style="min-width:0"><div class="nm">${esc(s.stock_name)}</div>`
+                + `<div class="sub">${esc(s.market || s.stock_code)}</div></span></span>`
+                + `<span class="hm-px">${s.price ? won(s.price) : '—'}</span>`
+                + `<span class="hm-rt ${c}">${rateTxt(s.change_rate)}</span>`
+                + `<span class="hm-ex">${extra(s)}</span></a>`;
+        }).join('')
+        + (list.length > shown ? `<button type="button" class="hm-more" id="hm-more">더 보기</button>` : '');
+        $('hm-more')?.addEventListener('click', () => { shown += 20; renderList(); });
+    }
+    $('hm-tabs').addEventListener('click', e => {
+        const b = e.target.closest('button[data-sort]'); if (!b) return;
+        sortBy = b.dataset.sort; shown = 20;
+        document.querySelectorAll('#hm-tabs button').forEach(x => x.classList.toggle('on', x === b));
+        renderList();
     });
 
-    renderAll();
+    // ================= 오른쪽: 내 투자 · 관심종목 =================
+    function renderMy() {
+        if (!MY) return;
+        const total = MY.cash + MY.stock, vs = total - MY.initial, vsr = MY.initial ? vs / MY.initial * 100 : 0;
+        $('my-total').textContent = won(total);
+        $('my-pl').textContent = `시작 금액보다 ${sign(vs)}${won(vs)} (${rateTxt(vsr)})`;
+        $('my-pl').className = 'pl ' + cls(Math.round(vs));
+        $('my-cash').textContent = won(MY.cash);
+        $('my-stock').textContent = won(MY.stock);
+    }
+    function renderWatch() {
+        const box = $('watch-list');
+        $('watch-count').textContent = myWatch.length || '';
+        if (!LOGGED) { box.innerHTML = `<div class="hm-empty"><b>로그인하면 보여요</b>관심 있는 종목을 모아 한눈에 볼 수 있어요.</div>`; return; }
+        if (!myWatch.length) { box.innerHTML = `<div class="hm-empty"><b>관심 종목이 없어요</b>종목 화면에서 ☆를 누르면 여기에 모여요.</div>`; return; }
+        box.innerHTML = myWatch.map(s => {
+            const c = cls(Number(s.change_price));
+            return `<a class="hm-wrow" href="stock_detail.php?code=${esc(s.stock_code)}" data-code="${esc(s.stock_code)}">${logo(s.stock_code, s.stock_name)}`
+                + `<span class="nm">${esc(s.stock_name)}</span>`
+                + `<span class="r"><div class="p">${s.price ? won(s.price) : '—'}</div><div class="c ${c}">${rateTxt(s.change_rate)}</div></span></a>`;
+        }).join('');
+    }
 
-    // ---------- 30초마다 순위 새로고침 (거래대금 변동 반영) ----------
-    setInterval(async () => {
+    function renderAll() { renderStatus(); renderList(); renderWatch(); }
+
+    // ================= 갱신 =================
+    // 30초마다 순위·조회수·관심종목을 다시 받아온다 (화면을 보고 있을 때만)
+    async function poll() {
         try {
-            const res = await fetch('get_market.php');
-            stocks = await res.json();
-            // 많이 본 종목(조회수)도 함께 갱신
-            const mv = await fetch('get_most_viewed.php');
-            if (mv.ok) mostViewed = await mv.json();
-            if (isLoggedIn) {
-                const w = await fetch('get_prices.php');
-                if (w.ok) myWatch = await w.json();
-            }
+            const [m, v, w] = await Promise.all([
+                fetch('get_market.php').then(r => r.ok ? r.json() : null),
+                fetch('get_most_viewed.php').then(r => r.ok ? r.json() : null),
+                LOGGED ? fetch('get_prices.php').then(r => r.ok ? r.json() : null) : null,
+            ]);
+            if (Array.isArray(m)) stocks = m;
+            if (Array.isArray(v)) mostViewed = v;
+            if (Array.isArray(w)) myWatch = w;
             renderAll();
-        } catch (e) {
-            /* 네트워크 일시 오류는 무시 */ }
-    }, 30000);
+        } catch (e) { /* 네트워크 일시 오류는 다음 주기에 다시 */ }
+    }
+    setInterval(() => { if (!document.hidden) poll(); }, 30000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
 
-    // ---------- 실시간 WS: 가격만 즉시 갱신 ----------
-    const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/');
-    ws.onmessage = (event) => {
-        const d = JSON.parse(event.data);
-        if (d.type && d.type !== 'price') return; // 상세용 호가/체결 메시지는 홈에서 무시
-        // 메모리 데이터 업데이트
-        const hit = stocks.find(s => s.stock_code === d.stock_code);
-        if (hit) {
-            hit.price = d.price;
-            hit.change_price = d.change_price;
-            hit.change_rate = d.change_rate;
-            hit.volume = d.volume;
-            if (d.trade_value != null) hit.trade_value = d.trade_value;
-        }
-        const w = myWatch.find(s => s.stock_code === d.stock_code);
-        if (w) {
-            w.price = d.price;
-            w.change_price = d.change_price;
-            w.change_rate = d.change_rate;
-        }
-
-        // 화면의 해당 행들 갱신 + 반짝임
-        document.querySelectorAll(`.stock-row[data-code="${d.stock_code}"]`).forEach(row => {
-            const c = cls(d.change_price);
-            row.querySelector('.pr').textContent = won(d.price);
-            const rt = row.querySelector('.rt');
-            rt.textContent = changeText(d.change_price, d.change_rate);
-            rt.className = 'rt ' + c;
-            row.classList.remove('flash-up', 'flash-down');
-            void row.offsetWidth;
-            row.classList.add(d.change_price >= 0 ? 'flash-up' : 'flash-down');
+    // 실시간: 가격 메시지가 오면 해당 종목 숫자만 바꾸고 반짝 (끊기면 자동 재연결)
+    function applyPrice(d) {
+        [stocks, mostViewed, myWatch].forEach(list => {
+            const s = list.find(x => x.stock_code === d.stock_code);
+            if (s) Object.assign(s, { price: d.price, change_price: d.change_price, change_rate: d.change_rate, volume: d.volume ?? s.volume });
         });
-    };
+        const c = cls(Number(d.change_price));
+        document.querySelectorAll(`.hm-tr[data-code="${d.stock_code}"]`).forEach(row => {
+            const px = row.querySelector('.hm-px'), up = d.price > Number(px.textContent.replace(/[^0-9]/g, ''));
+            px.textContent = won(d.price);
+            const rt = row.querySelector('.hm-rt'); rt.textContent = rateTxt(d.change_rate); rt.className = 'hm-rt ' + c;
+            flash(px, up);
+        });
+        document.querySelectorAll(`.hm-wrow[data-code="${d.stock_code}"]`).forEach(row => {
+            const p = row.querySelector('.p'), up = d.price > Number(p.textContent.replace(/[^0-9]/g, ''));
+            p.textContent = won(d.price);
+            const cc = row.querySelector('.c'); cc.textContent = rateTxt(d.change_rate); cc.className = 'c ' + c;
+            flash(p, up);
+        });
+    }
+    let tries = 0;
+    (function connect() {
+        let ws;
+        try { ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/'); }
+        catch (e) { return; }
+        ws.onopen = () => { tries = 0; };
+        ws.onmessage = ev => {
+            let d; try { d = JSON.parse(ev.data); } catch (e) { return; }
+            if (d.type && d.type !== 'price') return;          // 상세용 호가/체결 메시지는 홈에서 무시
+            applyPrice(d);
+        };
+        ws.onclose = () => { tries++; setTimeout(connect, Math.min(15000, 1000 * 2 ** Math.min(tries - 1, 4))); };
+    })();
+
+    renderIndices();
+    renderMy();
+    renderAll();
+    setInterval(renderStatus, 60000);   // 장 상태 문구는 1분마다
+})();
 </script>
 
 <?php include 'includes/footer.php'; ?>
