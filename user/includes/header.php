@@ -74,11 +74,15 @@ $logoCodes = array_map(fn($f) => basename($f, '.png'), glob(__DIR__ . '/../asset
                     <a href="trade.php" class="nav-link">내 계좌</a>
                 <?php endif; ?>
             </div>
+            <!-- 휴대폰: 검색칸 대신 🔍 아이콘 → 누르면 검색칸이 펼쳐진다 -->
+            <button type="button" class="nav-search-btn" id="nav-search-btn" aria-label="종목 검색" aria-expanded="false">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+            </button>
             <form class="nav-search" onsubmit="return false;">
                 <input type="text" id="nav-search-input" placeholder="종목명을 검색하세요">
                 <div id="nav-search-results" class="nav-search-results"></div>
             </form>
-            <button type="button" class="theme-btn" data-theme-toggle aria-label="다크 모드로 바꾸기"></button>
+            <?php include __DIR__ . '/theme_switch.php'; ?>
             <?php if ($loggedIn): ?>
                 <span class="nav-user"><?= htmlspecialchars($_SESSION['nickname'] ?? '') ?>님</span>
                 <a href="logout.php" class="nav-logout">로그아웃</a>
@@ -128,8 +132,14 @@ $logoCodes = array_map(fn($f) => basename($f, '.png'), glob(__DIR__ . '/../asset
                     : `<div class="nav-search-empty">'${esc(kw)}'에 맞는 종목이 없어요</div>`;
             }, 250);
         });
+        // 휴대폰: 🔍 누르면 펼치고, 바깥을 누르거나 Esc 면 접는다
+        const nav = document.querySelector('.nav'), sbtn = document.getElementById('nav-search-btn');
+        const openSearch = (on) => { nav.classList.toggle('search-open', on); sbtn.setAttribute('aria-expanded', String(on)); if (on) input.focus(); };
+        sbtn.addEventListener('click', () => openSearch(true));
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && nav.classList.contains('search-open')) { openSearch(false); sbtn.focus(); } });
         document.addEventListener('click', (e) => {
             if (!input.contains(e.target) && !box.contains(e.target)) box.style.display = 'none';
+            if (nav.classList.contains('search-open') && !e.target.closest('.nav-search') && !e.target.closest('#nav-search-btn')) openSearch(false);
         });
     })();
     </script>

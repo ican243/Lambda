@@ -50,7 +50,7 @@ if (function_exists('adminCan') && adminCan('manage_admins')) $menu[] = ['admins
                 <div class="row2">
                     <span class="ad-badge <?= adminRole() === 'super' ? 'dark' : '' ?>"><?= roleLabel(adminRole()) ?></span>
                     <span style="display:inline-flex;align-items:center;gap:var(--sp-2);">
-                        <button type="button" class="theme-btn" data-theme-toggle aria-label="다크 모드로 바꾸기"></button>
+                        <?php include __DIR__ . '/../../user/includes/theme_switch.php'; ?>
                         <a href="logout.php">로그아웃</a>
                     </span>
                 </div>
