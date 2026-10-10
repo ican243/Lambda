@@ -14,6 +14,7 @@ if (!$admin || !password_verify($password, $admin['password'])) {
     exit;
 }
 
+session_regenerate_id(true);   // 로그인 성공 → 세션 번호 새로 발급 (세션 고정 공격 방지)
 $_SESSION['admin_id'] = $admin['id'];
 $_SESSION['admin_name'] = $admin['name'];
 $_SESSION['admin_role'] = $admin['role'] ?? 'super';   // 컬럼 도입 전 로그인이면 super(기존 관리자)

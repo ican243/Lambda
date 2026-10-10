@@ -60,79 +60,92 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $admins = getAllAdmins($conn);
 $myId = (int) ($_SESSION['admin_id'] ?? 0);
 
+$adminPage  = 'admins';
+$adminTitle = '관리자 계정';
+
 include 'includes/header.php';
 ?>
 
-<div class="admin-nav d-flex align-items-center gap-2 mb-4">
-    <a href="index.php" class="btn btn-outline-dark btn-sm">대시보드</a>
-    <a href="users.php" class="btn btn-outline-dark btn-sm">회원 관리</a>
-    <?php if (adminCan('settings')): ?><a href="settings.php" class="btn btn-outline-dark btn-sm">설정</a><?php endif; ?>
-    <?php if (adminCan('manage_admins')): ?><a href="admins.php" class="btn btn-dark btn-sm">관리자</a><?php endif; ?>
-    <span class="flex-grow-1"></span>
-    <span class="badge bg-<?= adminRole() === 'super' ? 'dark' : 'secondary' ?>"><?= roleLabel(adminRole()) ?></span>
-    <a href="logout.php" class="btn btn-outline-secondary btn-sm">로그아웃</a>
+<div class="ad-head">
+    <div>
+        <h1>관리자 계정</h1>
+        <p>누가 관리자 화면에 들어올 수 있고, 무엇을 할 수 있는지 정해요.</p>
+    </div>
 </div>
 
-<h2 class="mb-3">관리자 · 권한 관리</h2>
-
 <?php if (!adminCan('manage_admins')): ?>
-    <div class="alert alert-warning">이 페이지는 <b>최고관리자 전용</b>입니다. (현재: <?= roleLabel(adminRole()) ?>)</div>
+    <div class="ad-alert warn">🔒 <span>이 화면은 <b>최고관리자</b>만 쓸 수 있어요. (지금: <?= roleLabel(adminRole()) ?>)</span></div>
     <?php include 'includes/footer.php'; exit; ?>
 <?php endif; ?>
 
-<?php if ($msg): ?><div class="alert alert-success py-2"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
-<?php if ($err): ?><div class="alert alert-danger py-2"><?= htmlspecialchars($err) ?></div><?php endif; ?>
+<?php if ($msg): ?><div class="ad-alert ok">✅ <span><?= htmlspecialchars($msg) ?></span></div><?php endif; ?>
+<?php if ($err): ?><div class="ad-alert err">⚠️ <span><?= htmlspecialchars($err) ?></span></div><?php endif; ?>
 
-<div class="alert alert-light border small">
-    <b>역할 안내</b> — <span class="badge bg-dark">최고관리자</span> 전권(예수금·설정·관리자 관리) ·
-    <span class="badge bg-secondary">CS 담당자</span> 조회 + 계정 정지만 (돈·설정 불가)
+<div class="ad-grid c2">
+    <div class="ad-card">
+        <div class="ad-card-t" style="margin-bottom:var(--sp-2);"><span class="ad-badge dark">최고관리자</span></div>
+        <div class="ad-card-d" style="margin:0;">모든 권한 — 예수금 조정·일괄 지급, 운영 설정, 관리자 계정 관리</div>
+    </div>
+    <div class="ad-card">
+        <div class="ad-card-t" style="margin-bottom:var(--sp-2);"><span class="ad-badge">CS 담당자</span></div>
+        <div class="ad-card-d" style="margin:0;">조회 + 회원 계정 정지만 — 돈과 설정은 건드릴 수 없어요</div>
+    </div>
 </div>
 
-<table class="table align-middle">
-    <thead class="table-light"><tr><th>ID</th><th>아이디</th><th>이름</th><th>역할</th><th class="text-end">관리</th></tr></thead>
-    <tbody>
-    <?php foreach ($admins as $a): $isSuper = ($a['role'] === 'super'); $isMe = ((int) $a['id'] === $myId); ?>
-        <tr>
-            <td><?= (int) $a['id'] ?></td>
-            <td><?= htmlspecialchars($a['admin_id']) ?> <?php if ($isMe): ?><span class="badge bg-info text-dark">나</span><?php endif; ?></td>
-            <td><?= htmlspecialchars($a['name']) ?></td>
-            <td><span class="badge bg-<?= $isSuper ? 'dark' : 'secondary' ?>"><?= roleLabel($a['role']) ?></span></td>
-            <td class="text-end">
-                <form method="POST" class="d-inline"><?= csrfField() ?>
-                    <input type="hidden" name="action" value="role">
-                    <input type="hidden" name="id" value="<?= (int) $a['id'] ?>">
-                    <input type="hidden" name="role" value="<?= $isSuper ? 'staff' : 'super' ?>">
-                    <button class="btn btn-sm btn-outline-dark"><?= $isSuper ? 'CS로 강등' : '최고관리자로' ?></button>
-                </form>
-                <?php if (!$isMe): ?>
-                <form method="POST" class="d-inline" onsubmit="return confirm('삭제할까요?');"><?= csrfField() ?>
-                    <input type="hidden" name="action" value="delete">
-                    <input type="hidden" name="id" value="<?= (int) $a['id'] ?>">
-                    <button class="btn btn-sm btn-outline-danger">삭제</button>
-                </form>
-                <?php endif; ?>
-            </td>
-        </tr>
-    <?php endforeach; ?>
-    </tbody>
-</table>
+<div class="ad-card" style="margin-top:var(--sp-4);">
+    <div class="ad-card-h"><span class="ad-card-t">관리자 목록 <small><?= count($admins) ?>명</small></span></div>
+    <div class="ad-table-wrap"><table class="ad-table">
+        <thead><tr><th>관리자</th><th class="c">역할</th><th class="r">관리</th></tr></thead>
+        <tbody>
+        <?php foreach ($admins as $a): $isSuper = ($a['role'] === 'super'); $isMe = ((int) $a['id'] === $myId); ?>
+            <tr>
+                <td><b><?= htmlspecialchars($a['name']) ?></b> <?php if ($isMe): ?><span class="ad-badge blue">나</span><?php endif; ?>
+                    <div class="sm"><?= htmlspecialchars($a['admin_id']) ?> · #<?= (int) $a['id'] ?></div></td>
+                <td class="c"><span class="ad-badge <?= $isSuper ? 'dark' : '' ?>"><?= roleLabel($a['role']) ?></span></td>
+                <td class="r nw">
+                    <form method="POST" style="display:inline" data-confirm="<?= htmlspecialchars($a['name']) ?> 님을 <?= $isSuper ? 'CS 담당자로 바꿀까요?' : '최고관리자로 바꿀까요?' ?>"><?= csrfField() ?>
+                        <input type="hidden" name="action" value="role">
+                        <input type="hidden" name="id" value="<?= (int) $a['id'] ?>">
+                        <input type="hidden" name="role" value="<?= $isSuper ? 'staff' : 'super' ?>">
+                        <button class="ad-btn sm"><?= $isSuper ? 'CS로 바꾸기' : '최고관리자로' ?></button>
+                    </form>
+                    <?php if (!$isMe): ?>
+                    <form method="POST" style="display:inline" data-confirm="<?= htmlspecialchars($a['name']) ?> 님의 관리자 계정을 삭제할까요? 되돌릴 수 없어요."><?= csrfField() ?>
+                        <input type="hidden" name="action" value="delete">
+                        <input type="hidden" name="id" value="<?= (int) $a['id'] ?>">
+                        <button class="ad-btn sm danger-weak">삭제</button>
+                    </form>
+                    <?php endif; ?>
+                </td>
+            </tr>
+        <?php endforeach; ?>
+        </tbody>
+    </table></div>
+</div>
 
-<div class="card p-4 mt-3" style="max-width:640px;">
-    <h5>관리자 추가</h5>
-    <form method="POST" class="row g-2"><?= csrfField() ?>
+<div class="ad-card" style="max-width:720px;">
+    <div class="ad-card-h"><span class="ad-card-t">관리자 추가</span></div>
+    <form method="POST"><?= csrfField() ?>
         <input type="hidden" name="action" value="add">
-        <div class="col-md-6"><input type="text" name="admin_id" class="form-control" placeholder="로그인 아이디" required></div>
-        <div class="col-md-6"><input type="text" name="name" class="form-control" placeholder="이름" required></div>
-        <div class="col-md-6"><input type="password" name="password" class="form-control" placeholder="비밀번호" required></div>
-        <div class="col-md-4">
-            <select name="role" class="form-select">
-                <option value="staff">CS 담당자</option>
-                <option value="super">최고관리자</option>
-            </select>
+        <div class="ad-grid c2" style="gap:var(--sp-3);">
+            <div><label class="ad-label">로그인 아이디</label><input type="text" name="admin_id" class="ad-input" style="width:100%;" autocomplete="off" required></div>
+            <div><label class="ad-label">이름</label><input type="text" name="name" class="ad-input" style="width:100%;" required></div>
+            <div><label class="ad-label">비밀번호</label><input type="password" name="password" class="ad-input" style="width:100%;" autocomplete="new-password" required></div>
+            <div><label class="ad-label">역할</label>
+                <select name="role" class="ad-select" style="width:100%;">
+                    <option value="staff">CS 담당자</option>
+                    <option value="super">최고관리자</option>
+                </select>
+            </div>
         </div>
-        <div class="col-md-2"><button class="btn btn-dark w-100">추가</button></div>
+        <button class="ad-btn dark" style="margin-top:var(--sp-4);">관리자 추가</button>
     </form>
 </div>
 
-<div class="mb-5"></div>
+<script>
+    document.querySelectorAll('form[data-confirm]').forEach(f => f.addEventListener('submit', e => {
+        if (!confirm(f.dataset.confirm)) e.preventDefault();
+    }));
+</script>
+
 <?php include 'includes/footer.php'; ?>

@@ -46,6 +46,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } catch (Exception $e) {
         $err = $e->getMessage();
     }
+    // 처리 후 반드시 다른 주소로 넘긴다(PRG). 안 그러면 새로고침 한 번에 '전체 회원 일괄 지급'이 또 실행될 수 있다.
+    $q = $msg ? 'msg=' . urlencode($msg) : 'err=' . urlencode($err ?: '알 수 없는 작업입니다.');
+    header('Location: settings.php?' . $q);
+    exit;
 }
 
 $initialCash = getInitialCash($conn);
@@ -65,149 +69,146 @@ $res = mysqli_query($conn, "
 ");
 if ($res) while ($row = mysqli_fetch_assoc($res)) $grantLogs[] = $row;
 
+$adminPage  = 'settings';
+$adminTitle = '운영 설정';
+
 include 'includes/header.php';
 ?>
 
-<style>.num{font-variant-numeric:tabular-nums;}</style>
-
-<div class="admin-nav d-flex align-items-center gap-2 mb-4">
-    <a href="index.php" class="btn btn-outline-dark btn-sm">대시보드</a>
-    <a href="users.php" class="btn btn-outline-dark btn-sm">회원 관리</a>
-    <?php if (adminCan('settings')): ?><a href="settings.php" class="btn btn-dark btn-sm">설정</a><?php endif; ?>
-    <?php if (adminCan('manage_admins')): ?><a href="admins.php" class="btn btn-outline-dark btn-sm">관리자</a><?php endif; ?>
-    <span class="flex-grow-1"></span>
-    <span class="badge bg-<?= adminRole() === 'super' ? 'dark' : 'secondary' ?>"><?= roleLabel(adminRole()) ?></span>
-    <span class="text-muted"><?= htmlspecialchars($_SESSION['admin_name']) ?>님</span>
-    <a href="logout.php" class="btn btn-outline-secondary btn-sm">로그아웃</a>
+<div class="ad-head">
+    <div>
+        <h1>운영 설정</h1>
+        <p>예수금, 점검 모드, 공지처럼 서비스 전체에 영향을 주는 설정이에요.</p>
+    </div>
 </div>
 
 <?php if (!adminCan('settings')): ?>
-    <div class="alert alert-warning">이 페이지는 <b>최고관리자 전용</b>입니다. (현재: <?= roleLabel(adminRole()) ?>)</div>
+    <div class="ad-alert warn">🔒 <span>이 화면은 <b>최고관리자</b>만 쓸 수 있어요. (지금: <?= roleLabel(adminRole()) ?>)</span></div>
     <?php include 'includes/footer.php'; exit; ?>
 <?php endif; ?>
 
-<h2 class="mb-3">설정 · 예수금 관리</h2>
+<?php if ($msg): ?><div class="ad-alert ok">✅ <span><?= htmlspecialchars($msg) ?></span></div><?php endif; ?>
+<?php if ($err): ?><div class="ad-alert err">⚠️ <span><?= htmlspecialchars($err) ?></span></div><?php endif; ?>
 
-<?php if ($msg): ?><div class="alert alert-success py-2"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
-<?php if ($err): ?><div class="alert alert-danger py-2"><?= htmlspecialchars($err) ?></div><?php endif; ?>
+<!-- 점검 모드 (가장 위험 → 맨 위) -->
+<div class="ad-card <?= $maintOn ? 'danger' : '' ?>">
+    <div class="ad-card-h">
+        <span class="ad-card-t">서비스 점검 모드</span>
+        <span class="ad-badge <?= $maintOn ? 'bad' : 'ok' ?>"><?= $maintOn ? '● 점검 중 — 거래 차단됨' : '● 정상 운영' ?></span>
+    </div>
+    <p class="ad-card-d">켜면 회원들의 <b>구매·판매가 즉시 막히고</b>, 모든 화면 위에 아래 안내 문구가 떠요. 시세 보기는 그대로 돼요.</p>
+    <form method="POST" class="ad-form-row" data-confirm="<?= $maintOn ? '점검 모드를 끄고 거래를 다시 열까요?' : '점검 모드를 켤까요? 회원들의 거래가 즉시 막혀요.' ?>"><?= csrfField() ?>
+        <input type="hidden" name="action" value="toggle_maint">
+        <input type="hidden" name="mode" value="<?= $maintOn ? '0' : '1' ?>">
+        <input type="text" name="maintenance_msg" class="ad-input grow" value="<?= htmlspecialchars($maintMsg) ?>" placeholder="점검 안내 문구" maxlength="200">
+        <button class="ad-btn <?= $maintOn ? 'primary' : 'danger' ?>"><?= $maintOn ? '점검 끝내기' : '점검 시작하기' ?></button>
+    </form>
+</div>
 
-<div class="row g-3">
-    <!-- 초기 예수금 설정 -->
-    <div class="col-md-6">
-        <div class="card p-4 h-100">
-            <h5>신규 가입 초기 예수금</h5>
-            <p class="text-muted small">새로 가입하는 회원에게 지급되는 가상 예수금 기본값입니다.</p>
-            <div class="mb-2">현재 설정: <b class="num"><?= number_format($initialCash) ?>원</b></div>
-            <form method="POST" class="row g-2 align-items-center"><?= csrfField() ?>
-                <input type="hidden" name="action" value="set_initial">
-                <div class="col-auto">
-                    <div class="input-group">
-                        <input type="number" name="initial_cash" class="form-control num" value="<?= $initialCash ?>" min="0" step="1000000" required>
-                        <span class="input-group-text">원</span>
-                    </div>
-                </div>
-                <div class="col-auto"><button class="btn btn-dark">저장</button></div>
-            </form>
-            <p class="text-muted small mt-2 mb-0">※ 이미 가입한 회원의 잔액에는 영향을 주지 않습니다.</p>
-        </div>
+<div class="ad-grid c2">
+    <!-- 초기 예수금 -->
+    <div class="ad-card">
+        <div class="ad-card-h"><span class="ad-card-t">신규 가입 시작 금액</span></div>
+        <p class="ad-card-d">새로 가입하는 회원에게 주는 모의자금이에요. 이미 가입한 회원의 잔액은 바뀌지 않아요.</p>
+        <div class="ad-kpi" style="margin-bottom:var(--sp-4);"><div class="k">지금 설정</div><div class="v"><?= number_format($initialCash) ?>원</div></div>
+        <form method="POST" class="ad-form-row"><?= csrfField() ?>
+            <input type="hidden" name="action" value="set_initial">
+            <div class="ad-unit grow"><input type="number" name="initial_cash" class="ad-input" value="<?= $initialCash ?>" min="0" step="1000000" required><span>원</span></div>
+            <button class="ad-btn dark">저장</button>
+        </form>
     </div>
 
     <!-- 일괄 지급 -->
-    <div class="col-md-6">
-        <div class="card p-4 h-100">
-            <h5>예수금 일괄 지급 (이벤트)</h5>
-            <p class="text-muted small">현재 전체 회원 <b><?= number_format($userCount) ?>명</b>의 예수금에 지정 금액을 더해줍니다.</p>
-            <form method="POST" onsubmit="return confirm('전체 회원에게 지급할까요? 되돌릴 수 없습니다.');"><?= csrfField() ?>
-                <input type="hidden" name="action" value="grant_all">
-                <div class="input-group mb-2">
-                    <input type="number" name="amount" class="form-control num" placeholder="지급 금액" min="1" step="100000" required>
-                    <span class="input-group-text">원</span>
-                </div>
-                <input type="text" name="reason" class="form-control mb-2" placeholder="지급 사유 (예: 오픈 기념 이벤트)">
-                <button class="btn btn-danger w-100">전체 회원에게 지급</button>
-            </form>
-        </div>
+    <div class="ad-card">
+        <div class="ad-card-h"><span class="ad-card-t">전체 회원 일괄 지급 <small>이벤트</small></span></div>
+        <p class="ad-card-d">회원 <b><?= number_format($userCount) ?>명</b> 모두의 예수금에 같은 금액을 더해요. <b>되돌릴 수 없어요.</b></p>
+        <form method="POST" id="grant-form"><?= csrfField() ?>
+            <input type="hidden" name="action" value="grant_all">
+            <div class="ad-form-row">
+                <div class="ad-unit grow"><input type="number" name="amount" class="ad-input" placeholder="1명당 지급 금액" min="1" step="100000" required><span>원</span></div>
+            </div>
+            <div class="ad-form-row" style="margin-top:var(--sp-2);">
+                <input type="text" name="reason" class="ad-input grow" placeholder="지급 사유 (예: 오픈 기념 이벤트)" maxlength="100">
+                <button class="ad-btn danger">지급하기</button>
+            </div>
+        </form>
     </div>
 </div>
 
-<!-- 운영 컨트롤: 점검 모드 -->
-<div class="card p-4 mt-3 <?= $maintOn ? 'border-danger' : '' ?>">
-    <h5>서비스 점검 모드 (Kill Switch)</h5>
-    <p class="text-muted small mb-2">켜면 유저의 <b>매수/매도가 즉시 차단</b>되고, 전 페이지 상단에 점검 배너가 표시됩니다. (열람은 가능)</p>
-    <div class="mb-3">현재 상태:
-        <?php if ($maintOn): ?><span class="badge bg-danger">점검 중</span><?php else: ?><span class="badge bg-success">정상 운영</span><?php endif; ?>
-    </div>
-    <form method="POST" class="row g-2 align-items-end"><?= csrfField() ?>
-        <input type="hidden" name="action" value="toggle_maint">
-        <input type="hidden" name="mode" value="<?= $maintOn ? '0' : '1' ?>">
-        <div class="col-md-8">
-            <label class="form-label small text-muted">점검 안내 문구</label>
-            <input type="text" name="maintenance_msg" class="form-control" value="<?= htmlspecialchars($maintMsg) ?>">
-        </div>
-        <div class="col-md-4">
-            <button class="btn w-100 <?= $maintOn ? 'btn-success' : 'btn-danger' ?>"><?= $maintOn ? '점검 모드 끄기' : '점검 모드 켜기' ?></button>
-        </div>
-    </form>
-</div>
-
-<!-- 공지사항 관리 -->
-<div class="card p-4 mt-3">
-    <h5>공지사항 관리</h5>
-    <p class="text-muted small">활성 공지는 유저 페이지 상단에 배너로 표시됩니다.</p>
-    <form method="POST" class="row g-2 mb-3"><?= csrfField() ?>
+<!-- 공지 -->
+<div class="ad-card" style="margin-top:var(--sp-4);">
+    <div class="ad-card-h"><span class="ad-card-t">공지사항 <small>노출 중인 공지는 모든 사용자 화면 위에 떠요</small></span></div>
+    <form method="POST" class="ad-form-row" style="margin-bottom:var(--sp-4);"><?= csrfField() ?>
         <input type="hidden" name="action" value="notice_create">
-        <div class="col-md-4"><input type="text" name="title" class="form-control" placeholder="공지 제목" required></div>
-        <div class="col-md-6"><input type="text" name="body" class="form-control" placeholder="내용 (선택)"></div>
-        <div class="col-md-2"><button class="btn btn-dark w-100">등록</button></div>
+        <input type="text" name="title" class="ad-input" style="flex:1 1 200px;" placeholder="공지 제목" maxlength="100" required>
+        <input type="text" name="body" class="ad-input" style="flex:2 1 260px;" placeholder="내용 (선택)" maxlength="300">
+        <button class="ad-btn dark">등록</button>
     </form>
-    <table class="table table-sm align-middle mb-0">
-        <thead class="table-light"><tr><th>제목</th><th>내용</th><th class="text-center">노출</th><th class="text-end">관리</th></tr></thead>
+    <?php if (!$notices): ?>
+        <div class="ad-empty"><b>📢</b>등록된 공지가 없어요.</div>
+    <?php else: ?>
+    <div class="ad-table-wrap"><table class="ad-table">
+        <thead><tr><th>공지</th><th class="c">노출</th><th class="r">관리</th></tr></thead>
         <tbody>
-        <?php if (!$notices): ?>
-            <tr><td colspan="4" class="text-center text-muted py-3">등록된 공지가 없습니다.</td></tr>
-        <?php else: foreach ($notices as $n): ?>
-            <tr>
-                <td><b><?= htmlspecialchars($n['title']) ?></b></td>
-                <td class="small text-muted"><?= htmlspecialchars($n['body']) ?></td>
-                <td class="text-center">
-                    <form method="POST" class="d-inline"><?= csrfField() ?>
+        <?php foreach ($notices as $n): ?>
+            <tr class="<?= $n['is_active'] ? '' : 'off' ?>">
+                <td><b><?= htmlspecialchars($n['title']) ?></b><?php if (trim($n['body'] ?? '') !== ''): ?><div class="sm"><?= htmlspecialchars($n['body']) ?></div><?php endif; ?></td>
+                <td class="c">
+                    <form method="POST" style="display:inline"><?= csrfField() ?>
                         <input type="hidden" name="action" value="notice_toggle">
                         <input type="hidden" name="id" value="<?= (int) $n['id'] ?>">
                         <input type="hidden" name="active" value="<?= $n['is_active'] ? '0' : '1' ?>">
-                        <button class="btn btn-sm <?= $n['is_active'] ? 'btn-success' : 'btn-outline-secondary' ?>"><?= $n['is_active'] ? '노출 중' : '숨김' ?></button>
+                        <button class="ad-btn sm <?= $n['is_active'] ? 'ok-weak' : '' ?>" title="누르면 <?= $n['is_active'] ? '숨겨요' : '보여요' ?>"><?= $n['is_active'] ? '● 노출 중' : '숨김' ?></button>
                     </form>
                 </td>
-                <td class="text-end">
-                    <form method="POST" class="d-inline" onsubmit="return confirm('삭제할까요?');"><?= csrfField() ?>
+                <td class="r">
+                    <form method="POST" style="display:inline" data-confirm="'<?= htmlspecialchars($n['title']) ?>' 공지를 삭제할까요?"><?= csrfField() ?>
                         <input type="hidden" name="action" value="notice_delete">
                         <input type="hidden" name="id" value="<?= (int) $n['id'] ?>">
-                        <button class="btn btn-sm btn-outline-danger">삭제</button>
+                        <button class="ad-btn sm danger-weak">삭제</button>
                     </form>
                 </td>
             </tr>
-        <?php endforeach; endif; ?>
+        <?php endforeach; ?>
         </tbody>
-    </table>
+    </table></div>
+    <?php endif; ?>
 </div>
 
-<h5 class="mt-4">최근 일괄 지급 이력</h5>
-<div class="table-responsive">
-<table class="table table-sm">
-    <thead class="table-light"><tr><th>일시</th><th>사유</th><th class="text-end">금액</th><th class="text-end">대상</th></tr></thead>
-    <tbody>
+<!-- 일괄 지급 이력 -->
+<div class="ad-card">
+    <div class="ad-card-h"><span class="ad-card-t">최근 일괄 지급 이력</span></div>
     <?php if (!$grantLogs): ?>
-        <tr><td colspan="4" class="text-center text-muted py-3">아직 일괄 지급 이력이 없습니다.</td></tr>
-    <?php else: foreach ($grantLogs as $g): ?>
-        <tr>
-            <td class="small"><?= htmlspecialchars($g['at']) ?></td>
-            <td><?= htmlspecialchars(preg_replace('/^\[일괄지급\]\s*/', '', $g['reason'])) ?: '<span class="text-muted">-</span>' ?></td>
-            <td class="text-end num">+<?= number_format($g['delta']) ?>원</td>
-            <td class="text-end num"><?= number_format($g['users']) ?>명</td>
-        </tr>
-    <?php endforeach; endif; ?>
-    </tbody>
-</table>
+        <div class="ad-empty"><b>📭</b>아직 일괄 지급 이력이 없어요.</div>
+    <?php else: ?>
+    <div class="ad-table-wrap"><table class="ad-table">
+        <thead><tr><th>일시</th><th>사유</th><th class="r">1명당</th><th class="r">대상</th></tr></thead>
+        <tbody>
+        <?php foreach ($grantLogs as $g): $why = preg_replace('/^\[일괄지급\]\s*/', '', $g['reason']); ?>
+            <tr>
+                <td class="sm nw"><?= htmlspecialchars(substr($g['at'], 0, 16)) ?></td>
+                <td><?= $why !== '' ? htmlspecialchars($why) : '<span class="muted">—</span>' ?></td>
+                <td class="r nw up"><b>+<?= number_format($g['delta']) ?>원</b></td>
+                <td class="r nw"><?= number_format($g['users']) ?>명</td>
+            </tr>
+        <?php endforeach; ?>
+        </tbody>
+    </table></div>
+    <?php endif; ?>
 </div>
 
-<div class="mb-5"></div>
+<script>
+    document.querySelectorAll('form[data-confirm]').forEach(f => f.addEventListener('submit', e => {
+        if (!confirm(f.dataset.confirm)) e.preventDefault();
+    }));
+    // 일괄 지급: 총액까지 계산해서 한 번 더 확인 + 두 번 눌러도 한 번만
+    document.getElementById('grant-form').addEventListener('submit', e => {
+        const amt = parseInt(e.target.amount.value, 10) || 0, users = <?= (int) $userCount ?>;
+        if (amt <= 0) { e.preventDefault(); alert('지급 금액을 입력해 주세요.'); return; }
+        const msg = `회원 ${users.toLocaleString('ko-KR')}명에게 ${amt.toLocaleString('ko-KR')}원씩, 총 ${(amt * users).toLocaleString('ko-KR')}원을 지급할까요?\n되돌릴 수 없어요.`;
+        if (!confirm(msg)) { e.preventDefault(); return; }
+        const b = e.target.querySelector('button'); b.disabled = true; b.textContent = '지급하는 중…';
+    });
+</script>
+
 <?php include 'includes/footer.php'; ?>
