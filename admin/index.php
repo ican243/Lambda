@@ -85,17 +85,6 @@ include 'includes/header.php';
     </div>
 </div>
 
-<!-- 수집 지연/소켓 경고 -->
-<?php if ($collectAge === null || $collectAge >= 600 || !$wsAlive): ?>
-    <div class="ad-alert err">⚠️
-        <span>
-            <?php if (!$wsAlive): ?>실시간 시세 서버(stock-ws)가 응답하지 않아요. <?php endif; ?>
-            <?php if ($collectAge === null): ?>아직 수집된 시세가 없어요.<?php elseif ($collectAge >= 600): ?>시세 수집이 <b><?= agoText($collectAge) ?></b>에서 멈춰 있어요.<?php endif; ?>
-            <small>cron/fetch_price.php · stock-ws 실행 상태와 한국투자증권 API 연결을 확인해 주세요.</small>
-        </span>
-    </div>
-<?php endif; ?>
-
 <!-- ===== 운영 상태 ===== -->
 <div class="ad-grid c4">
     <div class="ad-card ad-kpi">
