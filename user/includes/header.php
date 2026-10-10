@@ -28,6 +28,8 @@ $logoCodes = array_map(fn($f) => basename($f, '.png'), glob(__DIR__ . '/../asset
 
 <head>
     <meta charset="UTF-8">
+    <!-- 테마(라이트/다크)는 화면이 그려지기 전에 정해야 깜빡임이 없다 → 맨 먼저, 동기로 -->
+    <script src="assets/theme.js?v=<?= @filemtime(__DIR__ . '/../assets/theme.js') ?: '1' ?>"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($fullTitle) ?></title>
     <meta name="description" content="<?= htmlspecialchars($pageDesc) ?>">
@@ -76,6 +78,7 @@ $logoCodes = array_map(fn($f) => basename($f, '.png'), glob(__DIR__ . '/../asset
                 <input type="text" id="nav-search-input" placeholder="종목명을 검색하세요">
                 <div id="nav-search-results" class="nav-search-results"></div>
             </form>
+            <button type="button" class="theme-btn" data-theme-toggle aria-label="다크 모드로 바꾸기"></button>
             <?php if ($loggedIn): ?>
                 <span class="nav-user"><?= htmlspecialchars($_SESSION['nickname'] ?? '') ?>님</span>
                 <a href="logout.php" class="nav-logout">로그아웃</a>
@@ -91,14 +94,12 @@ $logoCodes = array_map(fn($f) => basename($f, '.png'), glob(__DIR__ . '/../asset
     // 점검 모드 배너 + 활성 공지 배너 (관리자 운영 컨트롤)
     if (isset($conn)):
         if (isMaintenance($conn)): ?>
-            <div style="background:#fdecee;color:#f04452;border-radius:12px;padding:12px 16px;margin:0 0 16px;font-size:14px;font-weight:600;">
-                🛠️ <?= htmlspecialchars(maintenanceMsg($conn)) ?>
-            </div>
+            <div class="notice-bar err">🛠️ <?= htmlspecialchars(maintenanceMsg($conn)) ?></div>
         <?php endif;
         foreach (getActiveNotices($conn) as $notice): ?>
-            <div style="background:#e8f3ff;color:#1b64da;border-radius:12px;padding:12px 16px;margin:0 0 12px;font-size:14px;">
+            <div class="notice-bar info">
                 📢 <b><?= htmlspecialchars($notice['title']) ?></b>
-                <?php if (trim($notice['body'] ?? '') !== ''): ?><span style="color:#3182f6;"> · <?= htmlspecialchars($notice['body']) ?></span><?php endif; ?>
+                <?php if (trim($notice['body'] ?? '') !== ''): ?><span> · <?= htmlspecialchars($notice['body']) ?></span><?php endif; ?>
             </div>
         <?php endforeach;
     endif; ?>

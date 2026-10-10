@@ -265,14 +265,18 @@ include 'includes/header.php';
     let ticks      = [];                            // 체결 내역
 
     const $ = id => document.getElementById(id);
-    const css = getComputedStyle(document.documentElement);
-    const COLOR = {
-        up:   css.getPropertyValue('--up').trim()   || '#f04452',
-        down: css.getPropertyValue('--down').trim() || '#3182f6',
-        flat: css.getPropertyValue('--flat').trim() || '#8b95a1',
-        line: css.getPropertyValue('--line').trim() || '#e5e8eb',
-        sub:  css.getPropertyValue('--text-sub').trim() || '#8b95a1',
-    };
+    // 차트는 그림판(canvas)이라 CSS 변수를 직접 못 쓴다 → 지금 테마의 색을 읽어 와서 넘겨준다 (테마 바뀌면 다시 읽음)
+    let COLOR = {};
+    function readColors() {
+        const css = getComputedStyle(document.documentElement);
+        const v = (name, fb) => css.getPropertyValue(name).trim() || fb;
+        COLOR = {
+            up: v('--up', '#f04452'), down: v('--down', '#3182f6'), flat: v('--flat', '#8b95a1'),
+            line: v('--line', '#e5e8eb'), sub: v('--text-sub', '#8b95a1'), weak: v('--line-weak', '#f2f4f6'),
+            cross: v('--icon-off', '#c9d2dc'), label: v('--text-2', '#4e5968'), dash: v('--placeholder', '#b0b8c1'),
+        };
+    }
+    readColors();
 
     // ================= 숫자 표시 =================
     const num  = n => Math.round(Number(n) || 0).toLocaleString('ko-KR');
@@ -465,11 +469,11 @@ include 'includes/header.php';
         chart = LightweightCharts.createChart($('sd-chart'), {
             autoSize: true,
             layout: { background: { color: 'transparent' }, textColor: COLOR.sub, fontFamily: 'Pretendard', fontSize: 12 },
-            grid: { vertLines: { visible: false }, horzLines: { color: '#f2f4f6' } },
+            grid: { vertLines: { visible: false }, horzLines: { color: COLOR.weak } },
             rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.12, bottom: 0.08 } },
             // fixLeftEdge/fixRightEdge 는 짝으로 켠다 → 최대로 줄여도 데이터 밖 빈 여백이 생기지 않는다
             timeScale: { borderVisible: false, fixLeftEdge: true, fixRightEdge: true, rightOffset: 0, lockVisibleTimeRangeOnResize: true },
-            crosshair: { mode: 1, vertLine: { color: '#c9d2dc', labelBackgroundColor: '#4e5968' }, horzLine: { color: '#c9d2dc', labelBackgroundColor: '#4e5968' } },
+            crosshair: { mode: 1, vertLine: { color: COLOR.cross, labelBackgroundColor: COLOR.label }, horzLine: { color: COLOR.cross, labelBackgroundColor: COLOR.label } },
             localization: {
                 locale: 'ko-KR',
                 priceFormatter: p => num(p),
@@ -516,7 +520,7 @@ include 'includes/header.php';
         }
         // 1일 차트에는 '어제 종가' 점선 → 지금 오른 건지 내린 건지 한눈에
         if (range === '1D' && prevClose) {
-            prevLine = series.createPriceLine({ price: prevClose, color: '#b0b8c1', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '어제' });
+            prevLine = series.createPriceLine({ price: prevClose, color: COLOR.dash, lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '어제' });
         }
         chart.timeScale().fitContent();
     }
@@ -568,6 +572,18 @@ include 'includes/header.php';
         }
     }
     RETRY.chart = () => loadChart(range);
+
+    // 라이트↔다크가 바뀌면 차트 글자·격자·선 색을 새 테마로 다시 칠한다 (theme.js 가 'themechange' 를 쏜다)
+    window.addEventListener('themechange', () => {
+        readColors();
+        if (!chart) return;
+        chart.applyOptions({
+            layout: { textColor: COLOR.sub },
+            grid: { horzLines: { color: COLOR.weak } },
+            crosshair: { vertLine: { color: COLOR.cross, labelBackgroundColor: COLOR.label }, horzLine: { color: COLOR.cross, labelBackgroundColor: COLOR.label } },
+        });
+        drawSeries();   // 캔들 빨강/파랑, 선 색, '어제' 점선
+    });
     RETRY.week  = () => document.querySelector('#sd-ranges [data-range="1W"]').click();
 
     $('sd-ranges').addEventListener('click', e => {

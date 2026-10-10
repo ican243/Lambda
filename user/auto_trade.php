@@ -158,6 +158,13 @@ include 'includes/header.php';
 
     // ================= 도넛 =================
     let donut = null;
+    // 조각 사이 테두리 = 카드 바탕색 (라이트=흰색, 다크=진회색) → 조각이 떨어져 보이게
+    const cardColor = () => getComputedStyle(document.documentElement).getPropertyValue('--card').trim() || '#fff';
+    window.addEventListener('themechange', () => {
+        if (!donut) return;
+        donut.data.datasets[0].borderColor = donut.data.datasets[0].hoverBorderColor = cardColor();
+        donut.update('none');
+    });
     function renderDonut(p) {
         const items = p.items || [];
         $('au-mix-box').hidden = !items.length;
@@ -180,7 +187,7 @@ include 'includes/header.php';
         if (donut) donut.destroy();
         donut = new Chart($('au-donut'), {
             type: 'doughnut',
-            data: { labels, datasets: [{ data, backgroundColor: SLICE_COLORS.slice(0, items.length), borderColor: '#fff', borderWidth: 3, hoverOffset: 12, hoverBorderColor: '#fff' }] },
+            data: { labels, datasets: [{ data, backgroundColor: SLICE_COLORS.slice(0, items.length), borderColor: cardColor(), borderWidth: 3, hoverOffset: 12, hoverBorderColor: cardColor() }] },
             options: {
                 cutout: '64%', responsive: true, maintainAspectRatio: false,
                 animation: { animateRotate: true, animateScale: true, duration: 800 },

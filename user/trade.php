@@ -62,7 +62,7 @@ include 'includes/header.php';
             <div class="acct-mix-bar"><span class="stock" id="acct-mix-stock" style="width:0%"></span><span class="cash"></span></div>
             <div class="acct-mix-legend">
                 <span><i style="background:var(--primary)"></i>주식 <b id="acct-mix-sp">0%</b></span>
-                <span><i style="background:#c9e2ff"></i>현금 <b id="acct-mix-cp">100%</b></span>
+                <span><i style="background:var(--primary-soft)"></i>현금 <b id="acct-mix-cp">100%</b></span>
             </div>
         </div>
 

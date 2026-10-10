@@ -297,6 +297,7 @@ include 'includes/header.php';
     })();
 
     renderIndices();
+    window.addEventListener('themechange', renderIndices);   // 미니 차트 선 색을 새 테마 색으로 다시 그림
     renderMy();
     renderAll();
     setInterval(renderStatus, 60000);   // 장 상태 문구는 1분마다

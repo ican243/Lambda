@@ -25,6 +25,8 @@ if (function_exists('adminCan') && adminCan('manage_admins')) $menu[] = ['admins
 
 <head>
     <meta charset="UTF-8">
+    <script src="../user/assets/theme.js?v=<?= @filemtime(__DIR__ . '/../../user/assets/theme.js') ?: '1' ?>"></script>
+    <meta name="theme-color" content="#ffffff">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
     <title><?= htmlspecialchars($adminTitle) ?> · 모아증권 관리자</title>
@@ -47,7 +49,10 @@ if (function_exists('adminCan') && adminCan('manage_admins')) $menu[] = ['admins
                 <div class="nm"><?= htmlspecialchars($_SESSION['admin_name'] ?? '') ?>님</div>
                 <div class="row2">
                     <span class="ad-badge <?= adminRole() === 'super' ? 'dark' : '' ?>"><?= roleLabel(adminRole()) ?></span>
-                    <a href="logout.php">로그아웃</a>
+                    <span style="display:inline-flex;align-items:center;gap:var(--sp-2);">
+                        <button type="button" class="theme-btn" data-theme-toggle aria-label="다크 모드로 바꾸기"></button>
+                        <a href="logout.php">로그아웃</a>
+                    </span>
                 </div>
                 <a class="ad-site" href="../user/index.php" target="_blank" rel="noopener">사용자 화면 보기 ↗</a>
             </div>

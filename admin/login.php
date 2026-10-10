@@ -13,7 +13,7 @@ include 'includes/header.php';
 ?>
 
 <div class="lg-card">
-    <div class="lg-mark" style="background:var(--text);">모</div>
+    <div class="lg-mark" style="background:var(--inverse);">모</div>
     <h1 class="lg-title">관리자 로그인</h1>
     <p class="lg-sub">모아증권 운영 도구예요. 관리자 계정으로 로그인해 주세요.</p>
 
@@ -33,7 +33,7 @@ include 'includes/header.php';
             <label for="ad-pw">비밀번호</label>
             <div class="lg-input"><input type="password" id="ad-pw" name="password" autocomplete="current-password" required></div>
         </div>
-        <button type="submit" class="lg-btn" style="background:var(--text);">로그인</button>
+        <button type="submit" class="lg-btn" style="background:var(--inverse);">로그인</button>
     </form>
 </div>
 <script>
