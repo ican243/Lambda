@@ -19,6 +19,8 @@ include 'includes/header.php';
 
     <?php if (($_GET['error'] ?? '') === 'csrf'): ?>
         <div class="lg-alert err">⚠️ <span>보안 확인 시간이 지났어요. 다시 한 번 로그인해 주세요.</span></div>
+    <?php elseif (($_GET['error'] ?? '') === 'locked'): ?>
+        <div class="lg-alert err">⏳ <span>비밀번호를 여러 번 틀렸어요. <b><?= max(1, (int) ($_GET['wait'] ?? 10)) ?>분</b> 뒤에 다시 시도해 주세요.</span></div>
     <?php elseif (isset($_GET['error'])): ?>
         <div class="lg-alert err">⚠️ <span>아이디 또는 비밀번호가 맞지 않아요.</span></div>
     <?php endif; ?>

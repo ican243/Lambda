@@ -75,7 +75,7 @@ include 'includes/header.php';
                 <p class="lg-hint"></p>
             </div>
 
-            <button type="submit" class="lg-btn" id="jn-submit" disabled>가입하기</button>
+            <button type="submit" class="lg-btn" id="jn-submit">가입하기</button>
         </form>
 
         <p class="lg-foot">이미 회원이신가요?<a href="login.php<?= $next !== '' ? '?next=' . urlencode($next) : '' ?>">로그인</a></p>
@@ -110,16 +110,11 @@ include 'includes/header.php';
         else hint.textContent = defaultHint[key];
         return r.ok;
     }
-    function checkAll() {
-        const ok = Object.keys(rules).map(k => rules[k](el[k].value).ok).every(Boolean);
-        $('jn-submit').disabled = !ok;
-    }
     Object.entries(el).forEach(([k, input]) => {
         input.addEventListener('input', () => {
             if (touched[k] || (k === 'pw' && input.value.length >= 8)) { touched[k] = true; paint(k); }
             if (k === 'pw' && touched.pw2) paint('pw2');   // 비밀번호를 고치면 확인 칸도 다시 비교
             if (k === 'pw2' && input.value.length >= el.pw.value.length) { touched.pw2 = true; paint('pw2'); }
-            checkAll();
         });
         input.addEventListener('blur', () => { if (input.value) { touched[k] = true; paint(k); } });
     });
@@ -131,7 +126,6 @@ include 'includes/header.php';
         field.classList.add('bad'); field.querySelector('.lg-hint').textContent = serverErr[1];
         el[serverErr[0]].focus();
     } else (el.email.value ? el.pw : el.email).focus();
-    checkAll();
 
     // 비밀번호 보기/숨기기
     document.querySelectorAll('[data-eye]').forEach(b => b.addEventListener('click', () => {
@@ -141,10 +135,13 @@ include 'includes/header.php';
         b.style.color = show ? 'var(--primary)' : '';
     }));
 
+    // 버튼은 항상 켜 둔다 — 크롬 자동 입력은 'input' 신호 없이 칸을 채워서, 꺼 두면 다 채워져도 안 눌리는 일이 생긴다.
+    // 대신 누른 순간 모든 칸을 검사하고, 틀린 칸이 있으면 보내지 않고 그 칸으로 커서를 옮긴다.
     // 마지막 확인 + 두 번 눌러도 한 번만
     $('jn-form').addEventListener('submit', e => {
-        Object.keys(rules).forEach(k => { touched[k] = true; paint(k, true); });
-        if ($('jn-submit').disabled || !Object.keys(rules).every(k => rules[k](el[k].value).ok)) { e.preventDefault(); return; }
+        if ($('jn-submit').disabled) { e.preventDefault(); return; }   // 이미 보내는 중
+        const bad = Object.keys(rules).filter(k => { touched[k] = true; return !paint(k, true); });
+        if (bad.length) { e.preventDefault(); el[bad[0]].focus(); return; }
         $('jn-submit').disabled = true; $('jn-submit').textContent = '가입하는 중…';
     });
 })();

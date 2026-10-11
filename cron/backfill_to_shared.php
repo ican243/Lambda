@@ -1,4 +1,6 @@
 <?php
+// 터미널(서버 시계 cron)에서만 실행 — 인터넷 주소로 열면 "없는 페이지"로 끝낸다
+if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 // cron/backfill_to_shared.php
 // -----------------------------------------------------------------
 // 로컬 Laragon DB → 원격 공용 DB 로 "시세 데이터만" 채워 넣는다.

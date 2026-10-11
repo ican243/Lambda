@@ -178,7 +178,26 @@
 }
 
 /* ---------- 3. 기본 리셋 ---------- */
+/* 예전엔 Bootstrap(233KB)이 해 주던 기본값 중 우리 화면이 실제로 쓰는 것만 옮겨 왔다 (화면은 그대로, 파일은 훨씬 가볍게)
+   :where(.site) = 사용자 화면(<body class="site">)에만 적용. 관리자 화면은 처음부터 Bootstrap 없이 만들어서 제외.
+   :where() 는 우선순위 점수가 0이라, 각 화면의 클래스 규칙(.lg-foot 등)을 절대 이기지 않는다. */
 * { box-sizing: border-box; }
+@media (prefers-reduced-motion: no-preference) { :root { scroll-behavior: smooth; } }   /* #ranking 같은 이동을 부드럽게 */
+[hidden] { display: none !important; }                       /* hidden 속성 = 무조건 숨김 */
+:where(.site) { font-size: 1rem; font-weight: 400; line-height: 1.5; -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
+:where(.site) :where(h1, h2, h3, h4, h5, h6) { margin-top: 0; margin-bottom: .5rem; font-weight: 500; line-height: 1.2; }
+:where(.site) :where(p) { margin-top: 0; margin-bottom: 1rem; }
+:where(.site) :where(b, strong) { font-weight: bolder; }
+:where(.site) :where(small) { font-size: .875em; }
+:where(.site) :where(a) { color: var(--primary); }
+:where(.site) :where(img, svg) { vertical-align: middle; }
+:where(.site) :where(table) { caption-side: bottom; border-collapse: collapse; }
+:where(.site) :where(th) { text-align: inherit; }
+:where(.site) :where(label) { display: inline-block; }
+:where(.site) :where(button, input, select, textarea) { margin: 0; font-family: inherit; font-size: inherit; line-height: inherit; }
+:where(.site) :where(button) { border-radius: 0; text-transform: none; }
+:where(.site) :where(button, [type="button"], [type="submit"]):not(:disabled) { cursor: pointer; }
+:where(.site) :where(textarea) { resize: vertical; }
 
 body {
     font-family: 'Pretendard', -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
@@ -207,6 +226,7 @@ body {
    14. 데스크탑 네비게이션 + 대시보드 레이아웃
    ============================================================ */
 .nav {
+    display: flex;   /* 안쪽 줄(.nav-inner)이 내용 너비만큼 가운데 놓이는 지금 모양 유지 */
     position: sticky; top: 0; z-index: 100;
     background: var(--nav-bg);
     backdrop-filter: saturate(180%) blur(12px);
@@ -220,7 +240,7 @@ body {
 .nav .brand { font-weight: 800; font-size: 20px; color: var(--text); text-decoration: none; white-space: nowrap; }
 .nav .brand b { color: var(--primary); }
 .nav-menu { display: flex; gap: 20px; }
-.nav-link { color: var(--text-2); text-decoration: none; font-weight: 600; font-size: 15px; white-space: nowrap; }
+.nav-link { display: block; padding: 8px 16px; color: var(--text-2); text-decoration: none; font-weight: 600; font-size: 15px; white-space: nowrap; }
 .nav-link:hover { color: var(--primary); }
 /* 신규 메뉴 강조(자동매매) — 점 하나로 새 기능 티만 낸다 */
 .nav-link-accent { position: relative; }

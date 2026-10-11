@@ -10,7 +10,7 @@ require_once __DIR__ . '/../config/app.php';  // 공용 운영계층(로깅·점
 function startUserSession()
 {
     session_name('USER_SESSION');
-    session_start();
+    startSecureSession();
 }
 
 // -----------------------------

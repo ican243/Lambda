@@ -64,9 +64,9 @@ function maintenanceMsg($conn) { return getSetting($conn, 'maintenance_msg', '�
 // ---- 접속/거래 IP 로깅 (FDS·CS 기반) ----
 function clientIp()
 {
-    $ip = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '';
-    if ($ip && strpos($ip, ',') !== false) $ip = trim(explode(',', $ip)[0]);   // 프록시 체인 첫 IP
-    return substr($ip, 0, 45);
+    // nginx 가 맨 앞에서 직접 손님을 받으므로(앞단 프록시 없음) 진짜 IP는 REMOTE_ADDR 하나뿐이다.
+    // X-Forwarded-For 는 손님이 마음대로 적어 보낼 수 있어서 믿으면 IP를 속일 수 있다 → 쓰지 않는다.
+    return substr($_SERVER['REMOTE_ADDR'] ?? '', 0, 45);
 }
 function logAccess($conn, $userId, $action)
 {
@@ -149,4 +149,88 @@ function requireCsrf($redirectTo = 'index.php', $mode = 'redirect', $errValue = 
         header('Location: ' . $redirectTo . $sep . $errKey . '=' . urlencode($err));
     }
     exit;
+}
+
+// -----------------------------------------------------------
+// 로그인 시도 제한 (비밀번호 마구 넣어 보기 공격 방어)
+// -----------------------------------------------------------
+// 10분 안에 같은 IP에서 5번 틀리면, 마지막으로 틀린 때부터 10분 동안 로그인을 막는다.
+// 여러 IP를 돌려 가며 한 계정만 노리는 경우도 있어서, 같은 아이디가 10번 틀려도 막는다.
+// $scope 는 'user' / 'admin' — 사용자와 관리자 기록을 따로 센다.
+const LOGIN_MAX_FAILS_IP = 5;
+const LOGIN_MAX_FAILS_ID = 10;
+const LOGIN_LOCK_SEC     = 600;
+
+function ensureLoginAttemptSchema($conn)
+{
+    static $done = false;
+    if ($done) return;
+    $done = true;
+    @mysqli_query($conn, "CREATE TABLE IF NOT EXISTS login_attempts (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        scope VARCHAR(10) NOT NULL, ip VARCHAR(45) NOT NULL, ident VARCHAR(100) NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_ip (scope, ip, created_at), INDEX idx_ident (scope, ident, created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+}
+
+// 지금 막혀 있으면 남은 초, 아니면 0
+function loginLockSeconds($conn, $scope, $ident)
+{
+    ensureLoginAttemptSchema($conn);
+    $ip = clientIp();
+    $ident = mb_strtolower(mb_substr(trim($ident), 0, 100));
+    $wait = 0;
+    foreach ([['ip', $ip, LOGIN_MAX_FAILS_IP], ['ident', $ident, LOGIN_MAX_FAILS_ID]] as [$col, $val, $max]) {
+        if ($val === '') continue;
+        $stmt = mysqli_prepare($conn, "SELECT COUNT(*) AS c, TIMESTAMPDIFF(SECOND, MAX(created_at), NOW()) AS ago
+            FROM login_attempts WHERE scope = ? AND $col = ? AND created_at > NOW() - INTERVAL " . LOGIN_LOCK_SEC . " SECOND");
+        if (!$stmt) continue;
+        mysqli_stmt_bind_param($stmt, "ss", $scope, $val);
+        mysqli_stmt_execute($stmt);
+        $row = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
+        if ($row && (int) $row['c'] >= $max) $wait = max($wait, LOGIN_LOCK_SEC - (int) $row['ago']);
+    }
+    return max(0, $wait);
+}
+
+function recordLoginFail($conn, $scope, $ident)
+{
+    ensureLoginAttemptSchema($conn);
+    $ip = clientIp();
+    $ident = mb_strtolower(mb_substr(trim($ident), 0, 100));
+    $stmt = mysqli_prepare($conn, "INSERT INTO login_attempts (scope, ip, ident) VALUES (?, ?, ?)");
+    if ($stmt) { mysqli_stmt_bind_param($stmt, "sss", $scope, $ip, $ident); @mysqli_stmt_execute($stmt); }
+    @mysqli_query($conn, "DELETE FROM login_attempts WHERE created_at < NOW() - INTERVAL 1 DAY");   // 하루 지난 기록은 정리
+}
+
+// 로그인 성공 → 이 IP·아이디의 틀린 기록을 지운다
+function clearLoginFails($conn, $scope, $ident)
+{
+    ensureLoginAttemptSchema($conn);
+    $ip = clientIp();
+    $ident = mb_strtolower(mb_substr(trim($ident), 0, 100));
+    $stmt = mysqli_prepare($conn, "DELETE FROM login_attempts WHERE scope = ? AND (ip = ? OR ident = ?)");
+    if ($stmt) { mysqli_stmt_bind_param($stmt, "sss", $scope, $ip, $ident); @mysqli_stmt_execute($stmt); }
+}
+
+// -----------------------------------------------------------
+// 로그인 쿠키(세션) 보호 설정 — user/admin 공용
+// -----------------------------------------------------------
+//   httponly : 자바스크립트가 쿠키를 읽지 못함 (화면에 나쁜 코드가 끼어들어도 쿠키를 못 훔침)
+//   secure   : https 연결에서만 쿠키를 보냄
+//   samesite : 다른 사이트에서 보낸 요청에는 쿠키를 안 붙임 (Lax = 링크로 들어오는 건 허용)
+//   strict_mode : 서버가 만든 적 없는 세션 번호는 받지 않음
+function startSecureSession()
+{
+    $https = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+    ini_set('session.use_strict_mode', '1');
+    session_set_cookie_params([
+        'lifetime' => 0,
+        'path'     => '/',
+        'secure'   => $https,
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
+    session_start();
 }

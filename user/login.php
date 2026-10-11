@@ -33,6 +33,8 @@ include 'includes/header.php';
             <div class="lg-alert err">⛔ <span>이용이 정지된 계정이에요. 관리자에게 문의해 주세요.</span></div>
         <?php elseif ($error === 'demo'): ?>
             <div class="lg-alert err">⚠️ <span>체험 계정을 준비하지 못했어요. 잠시 후 다시 시도해 주세요.</span></div>
+        <?php elseif ($error === 'locked'): ?>
+            <div class="lg-alert err">⏳ <span>비밀번호를 여러 번 틀렸어요. <b><?= max(1, (int) ($_GET['wait'] ?? 10)) ?>분</b> 뒤에 다시 시도해 주세요.</span></div>
         <?php elseif ($error === 'csrf'): ?>
             <div class="lg-alert err">⚠️ <span>보안 확인 시간이 지났어요. 다시 한 번 로그인해 주세요.</span></div>
         <?php elseif ($error !== ''): ?>

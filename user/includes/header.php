@@ -46,12 +46,11 @@ $logoCodes = array_map(fn($f) => basename($f, '.png'), glob(__DIR__ . '/../asset
     <meta property="og:url" content="<?= htmlspecialchars($pageUrl) ?>">
     <meta name="twitter:card" content="summary_large_image">
     <!-- 로컬 자산 (CDN 왕복 제거 → 로딩 빠름) -->
-    <link href="assets/bootstrap.min.css" rel="stylesheet">
     <link href="assets/toss.css?v=<?= $cssVer ?>" rel="stylesheet">
     <script>window.HAS_LOGO = new Set(<?= json_encode(array_values($logoCodes)) ?>);</script>
 </head>
 
-<body class="<?= empty($hideTabBar) ? 'has-tabbar' : '' ?>">
+<body class="site<?= empty($hideTabBar) ? ' has-tabbar' : '' ?>">
     <?php if ($isDemo): ?>
         <!-- 체험 계정 안내 띠 -->
         <div class="demo-bar">

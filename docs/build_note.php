@@ -1,4 +1,6 @@
 <?php
+// 터미널(서버 시계 cron)에서만 실행 — 인터넷 주소로 열면 "없는 페이지"로 끝낸다
+if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 /**
  * docs/build_note.php — 코드 공부노트 빌더
  *

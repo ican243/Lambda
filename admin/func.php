@@ -5,7 +5,7 @@ require_once __DIR__ . '/../config/app.php';   // 공용 운영계층(설정·�
 function startAdminSession()
 {
     session_name('ADMIN_SESSION');
-    session_start();
+    startSecureSession();
 }
 
 function isAdminLoggedIn()
