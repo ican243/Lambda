@@ -51,7 +51,7 @@ if (function_exists('adminCan') && adminCan('manage_admins')) $menu[] = ['admins
                     <span class="ad-badge <?= adminRole() === 'super' ? 'dark' : '' ?>"><?= roleLabel(adminRole()) ?></span>
                     <span style="display:inline-flex;align-items:center;gap:var(--sp-2);">
                         <?php include __DIR__ . '/../../user/includes/theme_switch.php'; ?>
-                        <a href="logout.php">로그아웃</a>
+                        <form action="logout.php" method="POST" class="logout-form"><?= csrfField() ?><button type="submit" class="ad-logout">로그아웃</button></form>
                     </span>
                 </div>
                 <a class="ad-site" href="../user/index.php" target="_blank" rel="noopener">사용자 화면 보기 ↗</a>

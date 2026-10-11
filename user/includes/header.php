@@ -56,7 +56,7 @@ $logoCodes = array_map(fn($f) => basename($f, '.png'), glob(__DIR__ . '/../asset
         <div class="demo-bar">
             <span class="long">🎟️ <b>체험 계정</b>으로 둘러보는 중이에요 · 매일 새벽 4시에 처음 상태로 돌아가요</span>
             <span class="short">🎟️ <b>체험 계정</b> · 매일 새벽 4시 초기화</span>
-            <a href="logout.php?to=join">내 계정 만들기 ›</a>
+            <form action="logout.php" method="POST" class="logout-form"><?= csrfField() ?><input type="hidden" name="to" value="join"><button type="submit">내 계정 만들기 ›</button></form>
         </div>
     <?php endif; ?>
 
@@ -84,7 +84,7 @@ $logoCodes = array_map(fn($f) => basename($f, '.png'), glob(__DIR__ . '/../asset
             <?php include __DIR__ . '/theme_switch.php'; ?>
             <?php if ($loggedIn): ?>
                 <span class="nav-user"><?= htmlspecialchars($_SESSION['nickname'] ?? '') ?>님</span>
-                <a href="logout.php" class="nav-logout">로그아웃</a>
+                <form action="logout.php" method="POST" class="logout-form"><?= csrfField() ?><button type="submit" class="nav-logout">로그아웃</button></form>
             <?php else: ?>
                 <a href="login.php" class="nav-login">로그인</a>
             <?php endif; ?>

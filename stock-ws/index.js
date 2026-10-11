@@ -10,7 +10,20 @@ const HOME_TARGETS = ['005930', '000660', '035420'];
 // -----------------------------
 // 브라우저들이 접속할 서버
 // -----------------------------
-const browserServer = new WebSocket.Server({ host: '127.0.0.1', port: 8080 });
+// 출입 확인: 우리 사이트 화면에서 연 연결만 받는다 (다른 사이트가 우리 실시간 시세를 몰래 가져다 쓰지 못하게)
+//   브라우저는 연결할 때 "어느 사이트에서 왔는지(Origin)"를 자동으로 붙이고, 화면 코드가 바꿀 수 없다.
+//   주소가 바뀌면 .env 에 WS_ALLOWED_ORIGINS=https://a.com,https://b.com 처럼 적으면 된다.
+const ALLOWED_ORIGINS = (process.env.WS_ALLOWED_ORIGINS || 'https://kir1.cafe24.com')
+    .split(',').map(s => s.trim()).filter(Boolean);
+const browserServer = new WebSocket.Server({
+    host: '127.0.0.1', port: 8080,
+    maxPayload: 4 * 1024,   // 브라우저가 보내는 건 "이 종목 볼래요" 같은 짧은 글뿐 → 큰 덩어리는 거절
+    verifyClient: ({ origin }) => {
+        const ok = ALLOWED_ORIGINS.includes(origin);
+        if (!ok) log('다른 사이트에서 온 연결 거절: ' + (origin || '(Origin 없음)'));
+        return ok;
+    },
+});
 const browserClients = new Set();
 
 // -----------------------------

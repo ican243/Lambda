@@ -9,3 +9,7 @@ stock-ws/node_modules/
 stock-ws/.env
 stock-ws/logs/
 cron/logs/
+
+# 개인 공부 노트·옛 미리보기 — 서버에만 두고 GitHub에는 올리지 않음
+docs/
+preview.html

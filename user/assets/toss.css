@@ -267,6 +267,10 @@ body {
 .nav-search-item:hover { background: var(--hover); }
 
 .nav-login { background: var(--primary); color: #fff; text-decoration: none; font-weight: 700; font-size: 14px; padding: 9px 16px; border-radius: 10px; white-space: nowrap; }
+/* 로그아웃: 링크처럼 보이는 버튼 (POST + 보안 토큰으로 보내야 해서 <form><button>).
+   :where() 는 우선순위 0 → .nav-logout 같은 각자의 글자 크기·색 규칙이 그대로 이긴다 */
+:where(.logout-form) { display: contents; }   /* 상자 없이 버튼만 그 자리에 → 예전 링크와 같은 위치 */
+:where(.logout-form) button { background: none; border: 0; padding: 0; margin: 0; font: inherit; letter-spacing: inherit; color: inherit; cursor: pointer; }
 .nav-logout { color: var(--text-sub); text-decoration: none; font-weight: 600; font-size: 14px; white-space: nowrap; }
 .nav-user { font-weight: 700; font-size: 14px; white-space: nowrap; }
 
@@ -1113,8 +1117,8 @@ body {
 .ad-me { margin-top: auto; border-top: 1px solid var(--line); padding: var(--sp-4) var(--sp-2) 0; }
 .ad-me .nm { font-size: var(--fs-md); font-weight: 700; }
 .ad-me .row2 { display: flex; align-items: center; justify-content: space-between; margin-top: var(--sp-2); }
-.ad-me a { font-size: var(--fs-sm); color: var(--text-sub); text-decoration: none; font-weight: 600; white-space: nowrap; }
-.ad-me a:hover { color: var(--text); }
+.ad-me a, .ad-me .ad-logout { font-size: var(--fs-sm); color: var(--text-sub); text-decoration: none; font-weight: 600; white-space: nowrap; }
+.ad-me a:hover, .ad-me .ad-logout:hover { color: var(--text); }
 .ad-site { display: block; font-size: var(--fs-sm); color: var(--text-sub); text-decoration: none; font-weight: 600; margin-top: var(--sp-3); }
 .ad-site:hover { color: var(--primary); }
 
@@ -1264,8 +1268,8 @@ body {
 /* 체험 계정 안내 띠 (맨 위 한 줄) */
 .demo-bar { display: flex; align-items: center; justify-content: center; gap: var(--sp-3); flex-wrap: wrap; background: var(--inverse); color: #fff;
             font-size: var(--fs-sm); padding: 8px var(--sp-4); text-align: center; word-break: keep-all; }
-.demo-bar a { color: #8cc2ff; font-weight: 700; text-decoration: none; white-space: nowrap; }
-.demo-bar a:hover { text-decoration: underline; }
+.demo-bar a, .demo-bar button { color: #8cc2ff; font-weight: 700; text-decoration: none; white-space: nowrap; }
+.demo-bar a:hover, .demo-bar button:hover { text-decoration: underline; }
 .demo-bar .short { display: none; }
 @media (max-width: 560px) { .demo-bar .long { display: none; } .demo-bar .short { display: inline; } }   /* 휴대폰: 한 줄로 짧게 */
 
