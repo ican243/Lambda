@@ -85,7 +85,8 @@ $logoCodes = array_map(fn($f) => basename($f, '.png'), glob(__DIR__ . '/../asset
             <?php if ($loggedIn): ?>
                 <span class="nav-user"><?= htmlspecialchars($_SESSION['nickname'] ?? '') ?>님</span>
                 <form action="logout.php" method="POST" class="logout-form"><?= csrfField() ?><button type="submit" class="nav-logout">로그아웃</button></form>
-            <?php else: ?>
+            <?php elseif (!in_array(basename($_SERVER['SCRIPT_NAME'] ?? ''), ['login.php', 'join.php'], true)): ?>
+                <!-- 로그인·회원가입 화면에서는 이미 그 화면이라 버튼을 숨긴다 -->
                 <a href="login.php" class="nav-login">로그인</a>
             <?php endif; ?>
         </div>

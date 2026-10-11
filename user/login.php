@@ -23,7 +23,7 @@ include 'includes/header.php';
 
 <div class="lg">
     <div class="lg-card">
-        <div class="lg-mark">모</div>
+        <img class="lg-mark" src="assets/favicon.svg" alt="" width="48" height="48">
         <h1 class="lg-title">다시 만나서 반가워요</h1>
         <p class="lg-sub">이메일로 로그인하고 모의투자를 이어서 해 보세요.</p>
 

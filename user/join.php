@@ -32,7 +32,7 @@ include 'includes/header.php';
 
 <div class="lg">
     <div class="lg-card">
-        <div class="lg-mark">모</div>
+        <img class="lg-mark" src="assets/favicon.svg" alt="" width="48" height="48">
         <h1 class="lg-title">1,000만원으로<br>모의투자 시작하기</h1>
         <p class="lg-sub">진짜 시세로 사고팔아 보세요. <b>실제 돈은 하나도 들지 않아요.</b></p>
         <div class="lg-perks"><span>💰 모의자금 1,000만원</span><span>📈 실시간 시세</span><span>🤖 자동매매</span></div>

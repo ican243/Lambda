@@ -602,6 +602,69 @@ function getSingleStockPrice($conn, $stockCode)
 }
 
 // =============================================================
+// [시세] KIS에 닿지 않을 때 쓰는 "DB에 저장된 마지막 시세" (종목 화면 요약 카드·종목 정보)
+// =============================================================
+// get_quote.php 가 KIS 조회에 실패하면 이걸 대신 돌려준다 → 화면에 ⚠️ 대신 마지막 값이 보인다.
+//   현재가·등락·거래량·거래대금 : stock_latest (마지막으로 받은 값)
+//   시가·고가·저가             : 그날의 1분봉에서 계산, 없으면 마지막 일봉
+//   52주 최고·최저             : 일봉 1년치
+//   PER·PBR·시가총액 등         : DB에 없음 → null (화면에서 '—')
+function getQuoteFromDb($conn, $stockCode)
+{
+    $stmt = mysqli_prepare($conn, "
+        SELECT sm.stock_name, sm.market, sl.price, sl.change_price, sl.change_rate, sl.volume, sl.trade_value, sl.updated_at
+        FROM stock_master sm LEFT JOIN stock_latest sl ON sl.stock_code = sm.stock_code
+        WHERE sm.stock_code = ?");
+    mysqli_stmt_bind_param($stmt, "s", $stockCode);
+    mysqli_stmt_execute($stmt);
+    $l = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
+    if (!$l || !$l['price']) return null;
+
+    // 일봉: 최근 1년 (마지막 봉 + 52주 최고·최저)
+    $stmt = mysqli_prepare($conn, "
+        SELECT d, open_p, high_p, low_p, close_p FROM stock_candles_1d
+        WHERE stock_code = ? AND d >= (SELECT MAX(d) FROM stock_candles_1d WHERE stock_code = ?) - INTERVAL 1 YEAR
+        ORDER BY d DESC");
+    mysqli_stmt_bind_param($stmt, "ss", $stockCode, $stockCode);
+    mysqli_stmt_execute($stmt);
+    $days = mysqli_fetch_all(mysqli_stmt_get_result($stmt), MYSQLI_ASSOC);
+
+    // 마지막 시세가 들어온 날(한국 날짜)의 1분봉으로 시가·고가·저가 — updated_at 은 UTC 라서 +9시간
+    $dayKst = $l['updated_at'] ? (new DateTime($l['updated_at'], new DateTimeZone('UTC')))->setTimezone(new DateTimeZone('Asia/Seoul'))->format('Y-m-d') : null;
+    $ohl = null;
+    if ($dayKst) {
+        $stmt = mysqli_prepare($conn, "
+            SELECT SUBSTRING_INDEX(GROUP_CONCAT(open_p ORDER BY ts), ',', 1) AS o, MAX(high_p) AS h, MIN(NULLIF(low_p, 0)) AS l
+            FROM stock_candles_1m WHERE stock_code = ? AND ts >= ? AND ts < ? + INTERVAL 1 DAY");
+        mysqli_stmt_bind_param($stmt, "sss", $stockCode, $dayKst, $dayKst);
+        mysqli_stmt_execute($stmt);
+        $r = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
+        if ($r && $r['h']) $ohl = ['open' => (int) $r['o'], 'high' => (int) $r['h'], 'low' => (int) $r['l']];
+    }
+    if (!$ohl && $days) $ohl = ['open' => (int) $days[0]['open_p'], 'high' => (int) $days[0]['high_p'], 'low' => (int) $days[0]['low_p']];
+    $ohl = $ohl ?? ['open' => 0, 'high' => 0, 'low' => 0];
+    $price = (int) $l['price'];
+    $ohl['high'] = max($ohl['high'], $price);                         // 마지막 가격이 범위 밖이면 넓혀 준다
+    if ($ohl['low']) $ohl['low'] = min($ohl['low'], $price);
+
+    return $ohl + [
+        'price'        => $price,
+        'change_price' => (int) $l['change_price'],
+        'change_rate'  => (float) $l['change_rate'],
+        'prev_close'   => $price - (int) $l['change_price'],
+        'volume'       => (int) $l['volume'],
+        'trade_value'  => (int) $l['trade_value'],
+        'w52_high'     => $days ? max(array_map('intval', array_column($days, 'high_p'))) : null,
+        'w52_low'      => $days ? min(array_map('intval', array_column($days, 'low_p'))) : null,
+        'market'       => $l['market'] ?? '',
+        'sector'       => '',
+        'upper_limit'  => null, 'lower_limit' => null, 'per' => null, 'pbr' => null, 'eps' => null, 'bps' => null,
+        'market_cap'   => null, 'shares' => null, 'frgn_ehrt' => null,
+        'stale'        => true,   // "실시간이 아니라 저장된 값" 표시
+    ];
+}
+
+// =============================================================
 // [차트] 기간별 캔들 데이터
 // =============================================================
 // 예전 코드는 `WHERE DATE(created_at) = CURDATE()` 로 '오늘'만 조회했다.

@@ -458,6 +458,8 @@ body {
 .sd-state.inline { position: static; padding: var(--sp-8) var(--sp-4); }
 .sd-state .ico { font-size: 28px; line-height: 1; }
 .sd-state .tt { font-size: var(--fs-md); font-weight: 700; color: var(--text); }
+.sd-state.rest .ico { font-size: 24px; opacity: .85; }   /* 🌙 데이터가 안 오는 상태 — 오류(⚠️)보다 차분하게 */
+.sd-info-note { margin: var(--sp-4) 0 0; font-size: var(--fs-sm); color: var(--text-sub); line-height: 1.5; word-break: keep-all; }
 .sd-state .ds { font-size: var(--fs-sm); color: var(--text-sub); line-height: 1.5; }
 .sd-retry { margin-top: var(--sp-2); border: none; background: var(--fill); color: var(--text); font-family: inherit; font-weight: 600;
             font-size: var(--fs-sm); height: 36px; padding: 0 var(--sp-4); border-radius: var(--radius-sm); cursor: pointer; }
@@ -659,8 +661,11 @@ body {
 }
 @media (max-width: 560px) {
     .sd-price { font-size: var(--fs-2xl); }
-    .sd-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .sd-stat:last-child { grid-column: span 2; }
+    /* 요약 카드 5개 → 위 3개(시가·고가·저가) + 아래 2개(거래량·거래대금). 6칸 격자에서 2칸씩 / 3칸씩 */
+    .sd-stats { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--sp-2); }
+    .sd-stat { grid-column: span 2; padding: var(--sp-3); }
+    .sd-stat:nth-child(n+4) { grid-column: span 3; }
+    .sd-stat .v { font-size: var(--fs-md); }
     .sd-ranges button { min-width: 0; flex: 1; padding: 0 6px; }
     .sd-ranges { flex: 1; }
     .sd-chart-bar { gap: var(--sp-2); }
@@ -816,6 +821,8 @@ body {
 .hm-index .v { font-size: var(--fs-xl); font-weight: 700; margin-top: 2px; letter-spacing: -0.02em; }
 .hm-index .c { font-size: var(--fs-sm); font-weight: 600; margin-top: 2px; white-space: nowrap; }
 .hm-spark { flex: none; width: 96px; height: 44px; }
+.hm-spark-box { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.hm-spark-box span { font-size: 11px; color: var(--text-sub); white-space: nowrap; }
 
 /* ---------- 2단 ---------- */
 .hm-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--sp-5); align-items: start; }
@@ -831,6 +838,8 @@ body {
 /* 순위 탭 */
 .hm-tabs { display: flex; gap: var(--sp-1); overflow-x: auto; margin: 0 calc(var(--sp-1) * -1) var(--sp-3); padding: 0 var(--sp-1); scrollbar-width: none; }
 .hm-tabs::-webkit-scrollbar { display: none; }
+/* 탭이 옆으로 더 있으면 오른쪽 끝을 흐리게 → "밀면 더 있어요" 힌트 (끝까지 밀면 사라짐, JS가 .more 를 붙였다 뗌) */
+.hm-tabs.more { -webkit-mask-image: linear-gradient(to right, #000 80%, transparent); mask-image: linear-gradient(to right, #000 80%, transparent); }
 .hm-tabs button { flex: none; border: none; background: var(--fill); height: 36px; padding: 0 var(--sp-4); border-radius: 999px; font-family: inherit;
                   font-size: var(--fs-sm); font-weight: 600; color: var(--text-2); cursor: pointer; transition: background .15s, color .15s; }
 .hm-tabs button:hover { background: var(--fill-2); }
@@ -1045,8 +1054,7 @@ body {
    ========================================================= */
 .lg { max-width: 420px; margin: var(--sp-8) auto var(--sp-8); }
 .lg-card { background: var(--card); border-radius: var(--radius-lg); box-shadow: var(--shadow); padding: var(--sp-8) var(--sp-6) var(--sp-6); }
-.lg-mark { width: 48px; height: 48px; border-radius: 14px; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center;
-           font-size: 22px; font-weight: 800; margin-bottom: var(--sp-5); }
+.lg-mark { display: block; width: 48px; height: 48px; border-radius: 14px; margin-bottom: var(--sp-5); }   /* 위쪽 메뉴와 같은 차트 아이콘 */
 .lg-title { font-size: 26px; font-weight: 700; line-height: 1.35; margin: 0; letter-spacing: -0.03em; }
 .lg-sub { font-size: var(--fs-md); color: var(--text-sub); margin: var(--sp-2) 0 var(--sp-6); line-height: 1.5; word-break: keep-all; }   /* 한국어는 단어 중간에서 줄바꿈하지 않게 */
 .lg-sub b { color: var(--primary); }

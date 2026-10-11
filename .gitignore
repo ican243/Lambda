@@ -2,6 +2,7 @@ config/kis_config.php
 config/db_config.php
 docs/server_setup.md
 config/token_cache.json
+config/kis_down.flag
 cron/temp_master/
 .DS_Store
 Thumbs.db

@@ -3,6 +3,27 @@ require_once __DIR__ . '/kis_config.php';
 require_once __DIR__ . '/db.php';
 
 // -----------------------------
+// KIS에 닿지 않을 때 잠깐 쉬기 (회로 차단기)
+// -----------------------------
+// KIS 서버에 연결이 안 되면 요청마다 3초씩 기다리게 된다. 종목 화면 하나가 요청 4개를 보내니
+// PHP 일꾼(전체 5명)이 금방 다 묶인다. 그래서 "연결 실패"를 60초 동안 기억해 두고,
+// 그동안은 기다리지 않고 바로 실패로 끝낸다 → 화면은 곧바로 DB 값·차분한 안내로 넘어간다.
+const KIS_DOWN_FILE = __DIR__ . '/kis_down.flag';
+const KIS_DOWN_SEC  = 60;
+
+function kisRecentlyDown()
+{
+    $t = @filemtime(KIS_DOWN_FILE);
+    return $t && $t > time() - KIS_DOWN_SEC;
+}
+// curl 결과를 보고: 연결 자체가 안 됐으면(주소 못 찾음·연결 거부·시간 초과) 기록, 됐으면 기록 지움
+function kisNoteConnect($curl)
+{
+    if (in_array(curl_errno($curl), [CURLE_COULDNT_RESOLVE_HOST, CURLE_COULDNT_CONNECT, CURLE_OPERATION_TIMEDOUT], true)) @touch(KIS_DOWN_FILE);
+    elseif (is_file(KIS_DOWN_FILE)) @unlink(KIS_DOWN_FILE);
+}
+
+// -----------------------------
 // 접근 토큰 발급 (캐싱 포함)
 // -----------------------------
 function getKisAccessToken()
@@ -19,7 +40,8 @@ function getKisAccessToken()
         }
     }
 
-    // 2. 캐시가 없거나 만료됐으면 새로 발급 요청
+    // 2. 캐시가 없거나 만료됐으면 새로 발급 요청 (방금 KIS에 연결이 안 됐으면 기다리지 않고 바로 실패)
+    if (kisRecentlyDown()) throw new Exception("토큰 발급 실패: KIS 연결 안 됨(잠시 대기 중)");
     $url = "https://openapivts.koreainvestment.com:29443/oauth2/tokenP";
 
     $data = [
@@ -40,6 +62,7 @@ function getKisAccessToken()
     ]);
 
     $response = curl_exec($curl);
+    kisNoteConnect($curl);
     curl_close($curl);
 
     $result = json_decode($response, true);
@@ -202,6 +225,7 @@ function fetchAndSaveStockPrice($conn, $stockCode, $stockName = null)
 function kisQuotationGet($path, $trId, $params, $retryCount = 0)
 {
     $token = getKisAccessToken();
+    if (kisRecentlyDown()) throw new Exception("KIS 연결 안 됨(잠시 대기 중)");
     $url = "https://openapivts.koreainvestment.com:29443" . $path . "?" . http_build_query($params);
 
     $curl = curl_init();
@@ -220,8 +244,10 @@ function kisQuotationGet($path, $trId, $params, $retryCount = 0)
         ],
     ]);
     $response = curl_exec($curl);
+    kisNoteConnect($curl);
     curl_close($curl);
     $result = json_decode($response, true);
+    if ($response === false) throw new Exception("KIS 연결 실패");
 
     if (($result['msg_cd'] ?? '') === 'EGW00201' && $retryCount < 3) {
         usleep(700000);

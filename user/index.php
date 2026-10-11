@@ -45,7 +45,7 @@ include 'includes/header.php';
         <div class="hm-main">
             <section class="hm-card hm-rankcard" id="ranking">
                 <div class="hm-card-h">
-                    <span class="hm-card-t">실시간 순위</span>
+                    <span class="hm-card-t" id="hm-rank-t">거래 순위</span>
                     <span class="hm-time" id="hm-time"></span>
                 </div>
                 <div class="hm-tabs" id="hm-tabs" role="tablist">
@@ -155,6 +155,8 @@ include 'includes/header.php';
         const fresh = latest && latest.toISOString().slice(0, 10) >= t.toISOString().slice(0, 10);
         const hm = d => `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
         // 오늘 시세가 아니면 마지막으로 받은 날짜·시각을 보여 준다 (예: '9월 17일 19:14 기준') → 멈춘 시세를 실시간으로 오해하지 않게
+        // 제목도 같이: 오늘 시세가 들어오고 있을 때만 '실시간', 아니면 '거래 순위' (옆의 '9월 17일 기준'과 말이 맞게)
+        $('hm-rank-t').textContent = fresh ? '실시간 순위' : '거래 순위';
         $('hm-time').textContent = fresh ? `${hm(t)} 기준` : latest ? `${latest.getUTCMonth() + 1}월 ${latest.getUTCDate()}일 ${hm(latest)} 기준` : '';
     }
 
@@ -173,7 +175,7 @@ include 'includes/header.php';
             return `<div class="hm-index"><div class="info"><div class="nm">${esc(ix.name)}</div>`
                 + `<div class="v">${Number(ix.close).toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>`
                 + `<div class="c ${c}">${sign(ix.change)}${Number(ix.change).toFixed(2)} (${rateTxt(ix.rate)})</div></div>`
-                + spark(ix.series, color) + `</div>`;
+                + `<div class="hm-spark-box">${spark(ix.series, color)}<span>최근 ${ix.series.length}거래일</span></div></div>`;   // 그래프가 어느 기간인지
         }).join('');
     }
 
@@ -208,7 +210,7 @@ include 'includes/header.php';
             return `<a class="hm-tr" href="stock_detail.php?code=${esc(s.stock_code)}" data-code="${esc(s.stock_code)}">`
                 + `<span class="hm-rank${i < 3 ? ' top' : ''}">${i + 1}</span>`
                 + `<span class="hm-stock">${logo(s.stock_code, s.stock_name)}<span style="min-width:0"><div class="nm">${esc(s.stock_name)}</div>`
-                + `<div class="sub">${esc(s.market || s.stock_code)}</div></span></span>`
+                + `<div class="sub">${esc(s.stock_code)}${s.market ? ' · ' + esc(s.market) : ''}</div></span></span>`   // 모든 줄이 '코드 · 시장' 같은 모양 (시장 정보가 없는 종목은 코드만)
                 + `<span class="hm-px">${s.price ? won(s.price) : '—'}</span>`
                 + `<span class="hm-rt ${c}">${rateTxt(s.change_rate)}</span>`
                 + `<span class="hm-ex">${extra(s)}</span></a>`;
@@ -220,8 +222,22 @@ include 'includes/header.php';
         const b = e.target.closest('button[data-sort]'); if (!b) return;
         sortBy = b.dataset.sort; shown = 20;
         document.querySelectorAll('#hm-tabs button').forEach(x => x.classList.toggle('on', x === b));
+        b.scrollIntoView({ block: 'nearest', inline: 'nearest' });   // 휴대폰: 누른 탭이 잘려 있으면 보이게
         renderList();
     });
+    // 탭이 옆으로 더 있으면 오른쪽 끝을 흐리게 (끝까지 밀면 흐림을 뗀다)
+    function tabHint() { const t = $('hm-tabs'); t.classList.toggle('more', t.scrollLeft + t.clientWidth < t.scrollWidth - 4); }
+    $('hm-tabs').addEventListener('scroll', tabHint, { passive: true });
+    addEventListener('resize', tabHint);
+    tabHint();
+
+    // PC: 오른쪽 칸은 스크롤해도 따라온다(sticky). 그런데 관심종목이 많아 화면보다 길어지면 아래쪽이 영영 안 보이므로,
+    // 그럴 때는 "아래쪽 끝"을 화면 아래에 맞춰 붙인다.
+    function fitSide() {
+        const side = document.querySelector('.hm-side'); if (!side) return;
+        side.style.top = Math.min(80, innerHeight - side.offsetHeight - 16) + 'px';
+    }
+    addEventListener('resize', fitSide);
 
     // ================= 오른쪽: 내 투자 · 관심종목 =================
     function renderMy() {
@@ -246,7 +262,7 @@ include 'includes/header.php';
         }).join('');
     }
 
-    function renderAll() { renderStatus(); renderList(); renderWatch(); }
+    function renderAll() { renderStatus(); renderList(); renderWatch(); fitSide(); }
 
     // ================= 갱신 =================
     // 30초마다 순위·조회수·관심종목을 다시 받아온다 (화면을 보고 있을 때만)

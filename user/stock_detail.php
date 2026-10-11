@@ -319,6 +319,21 @@ include 'includes/header.php';
              + (retry ? `<button type="button" class="sd-retry" data-retry="${retry}">${label}</button>` : '');
     }
     const stateHTML = (kind, title, desc, retry) => `<div class="sd-state inline">${stateInner(kind, title, desc, retry)}</div>`;
+
+    // KIS 시세 서버에 닿지 않을 때(서버가 'offline' 이라고 답함) — ⚠️ 오류 대신 🌙 차분한 안내.
+    // 고장이 아니라 "지금은 데이터가 안 오는 상태"라서, 처음 온 사람이 사이트가 망가졌다고 느끼지 않게 한다.
+    const isOffline = e => e && e.message === 'offline';
+    function marketOpenNow() {                    // 한국 시간 평일 9:00~15:30
+        const k = new Date(Date.now() + 9 * 3600e3), d = k.getUTCDay(), m = k.getUTCHours() * 60 + k.getUTCMinutes();
+        return d > 0 && d < 6 && m >= 540 && m < 930;
+    }
+    function restHTML(liveWhat) {
+        const [tt, ds] = liveWhat
+            ? (marketOpenNow() ? [`실시간 ${liveWhat} 기다리는 중이에요`, '시세 서버와 연결되면 여기에 바로 보여요.']
+                               : ['지금은 장이 닫혀 있어요', '장이 열리면(평일 9:00~15:30) 여기에 실시간으로 보여요.'])
+            : ['지금은 볼 수 없어요', '시세 서버와 연결되면 바로 보여요.'];
+        return `<div class="sd-state inline rest"><div class="ico">🌙</div><div class="tt">${tt}</div><div class="ds">${ds}</div></div>`;
+    }
     const RETRY = {};
     document.addEventListener('click', e => {
         const b = e.target.closest('[data-retry]');
@@ -457,7 +472,7 @@ include 'includes/header.php';
             renderBook(d);
         } catch (e) {
             console.warn('호가 로드 실패', e);
-            if (!book) $('sd-book').innerHTML = stateHTML('error', '호가를 불러오지 못했어요', '잠시 후 다시 시도해 주세요.', 'book');
+            if (!book) $('sd-book').innerHTML = isOffline(e) ? restHTML('호가를') : stateHTML('error', '호가를 불러오지 못했어요', '잠시 후 다시 시도해 주세요.', 'book');
         }
     }
     RETRY.book = loadBook;
@@ -669,7 +684,8 @@ include 'includes/header.php';
             renderTicks();
         } catch (e) {
             console.warn('체결 로드 실패', e);
-            $('sd-ticks').innerHTML = stateHTML('error', '체결 내역을 불러오지 못했어요', '', 'ticks');
+            if (ticks.length) renderTicks();             // 그사이 실시간 체결이 들어왔으면 그걸 보여 준다
+            else $('sd-ticks').innerHTML = isOffline(e) ? restHTML('체결을') : stateHTML('error', '체결 내역을 불러오지 못했어요', '', 'ticks');
         }
     }
     function setStrength(v) { if (v) $('sd-strength').textContent = Number(v).toFixed(1) + '%'; }
@@ -689,7 +705,7 @@ include 'includes/header.php';
                 }).join('') + '</tbody></table>';
         } catch (e) {
             console.warn('투자자 로드 실패', e);
-            box.innerHTML = stateHTML('error', '투자자 정보를 불러오지 못했어요', '', 'invest');
+            box.innerHTML = isOffline(e) ? restHTML('') : stateHTML('error', '투자자 정보를 불러오지 못했어요', '', 'invest');
         }
     }
 
@@ -701,17 +717,20 @@ include 'includes/header.php';
             return;
         }
         const q = quote;
+        const has = v => v !== null && v !== undefined && v !== '';   // DB 대체 시세에는 없는 값(null)이 있다 → '—'
+        const f = (v, fmt) => has(v) ? fmt(v) : '—';
         const rows = [
             ['시장', esc(q.market || '—')], ['업종', esc(q.sector || '—')],
-            ['어제 종가', won(q.prev_close)], ['시가총액', num(q.market_cap) + '억원'],
-            ['52주 최고', won(q.w52_high)], ['52주 최저', won(q.w52_low)],
-            ['상한가', won(q.upper_limit)], ['하한가', won(q.lower_limit)],
+            ['어제 종가', f(q.prev_close, won)], ['시가총액', f(q.market_cap, v => num(v) + '억원')],
+            ['52주 최고', f(q.w52_high, won)], ['52주 최저', f(q.w52_low, won)],
+            ['상한가', f(q.upper_limit, won)], ['하한가', f(q.lower_limit, won)],
             ['PER', q.per ? q.per + '배' : '—'], ['PBR', q.pbr ? q.pbr + '배' : '—'],
-            ['EPS', won(q.eps)], ['BPS', won(q.bps)],
-            ['상장주식수', num(q.shares) + '주'], ['외국인 소진율', q.frgn_ehrt + '%'],
+            ['EPS', f(q.eps, won)], ['BPS', f(q.bps, won)],
+            ['상장주식수', f(q.shares, v => num(v) + '주')], ['외국인 소진율', f(q.frgn_ehrt, v => v + '%')],
         ];
         box.innerHTML = '<div class="sd-info">' + rows.map(([k, v]) =>
-            `<div class="sd-info-row"><span class="k">${k}</span><span class="v">${v}</span></div>`).join('') + '</div>';
+            `<div class="sd-info-row"><span class="k">${k}</span><span class="v">${v}</span></div>`).join('') + '</div>'
+            + (q.stale ? '<p class="sd-info-note">🌙 저장된 마지막 시세로 보여 드려요. PER·시가총액 같은 값은 시세 서버와 연결되면 채워져요.</p>' : '');
     }
 
     // --- 커뮤니티 ---

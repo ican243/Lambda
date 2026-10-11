@@ -9,5 +9,6 @@ if ($code === '') { echo json_encode(['error' => 'no code']); exit; }
 try {
     echo json_encode(getRecentTrades($code));
 } catch (Exception $e) {
-    echo json_encode(['error' => $e->getMessage()]);
+    // KIS 시세 서버에 닿지 않음 → 'offline' 으로 통일. 화면은 ⚠️ 오류 대신 차분한 안내를 보여 준다.
+    echo json_encode(['error' => 'offline']);
 }

@@ -13,7 +13,7 @@ include 'includes/header.php';
 ?>
 
 <div class="lg-card">
-    <div class="lg-mark" style="background:var(--inverse);">모</div>
+    <img class="lg-mark" src="../user/assets/favicon.svg" alt="" width="48" height="48">
     <h1 class="lg-title">관리자 로그인</h1>
     <p class="lg-sub">모아증권 운영 도구예요. 관리자 계정으로 로그인해 주세요.</p>
 
