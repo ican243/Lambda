@@ -106,7 +106,18 @@ function broadcast(data) {
 let retryCount = 0;
 
 async function start() {
-    approvalKey = await getApprovalKey();
+    // 접속키를 못 받으면(KIS 서버에 닿지 않음 등) 프로그램을 끄지 않고 조금 기다렸다가 다시 시도한다.
+    //   예전: 실패 → 프로그램 꺼짐 → 5초 뒤 자동 재시작 → 또 실패 … (2분마다 반복, 기록이 하루 수십만 줄)
+    //   지금: 1분 → 2분 → 4분 → 8분 → 이후 10분 간격으로 조용히 재시도. 그동안 브라우저 연결은 계속 유지.
+    try {
+        approvalKey = await getApprovalKey();
+    } catch (err) {
+        retryCount++;
+        const delay = Math.min(60000 * 2 ** (retryCount - 1), 600000);
+        log(`접속키 발급 실패 (${err.code || err.message}) → ${delay / 60000}분 뒤 다시 시도 (${retryCount}번째)`);
+        setTimeout(start, delay);
+        return;
+    }
     log('접속키 발급 완료');
 
     kisWs = new WebSocket('ws://ops.koreainvestment.com:31000');

@@ -396,6 +396,7 @@ body {
 .sd-price { font-size: var(--fs-hero); font-weight: 700; line-height: 1.2; margin-top: var(--sp-2); letter-spacing: -0.03em;
             border-radius: 8px; display: inline-block; padding: 0 var(--sp-1); margin-left: calc(var(--sp-1) * -1); }
 .sd-change { font-size: var(--fs-md); font-weight: 600; margin-top: var(--sp-1); }
+.sd-asof { display: flex; width: fit-content; margin-top: var(--sp-1); }   /* 가격 아래 '9월 17일 10:14 기준' / '실시간' */
 .sd-change .lbl { color: var(--text-sub); font-weight: 500; margin-right: var(--sp-1); }
 
 /* 관심종목 별 — 손가락으로 누르기 쉬운 44px */

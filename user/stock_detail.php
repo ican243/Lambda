@@ -53,6 +53,16 @@ $chg    = (int) ($stock['change_price'] ?? 0);
 $rate   = (float) ($stock['change_rate'] ?? 0);
 $dirCls = $chg > 0 ? 'up' : ($chg < 0 ? 'down' : 'flat');
 
+// 이 가격이 언제 것인지 — 오늘이면 "오늘 14:30 기준", 아니면 "9월 17일 10:14 기준".
+// stock_latest.updated_at 은 DB(MySQL) 시계 = UTC 로 저장된다 → 한국 시간(+9)으로 바꿔서 보여 준다.
+// 실시간 가격이 들어오면 화면에서 '실시간'으로 바뀐다.
+$asof = '';
+if (!empty($stock['created_at'])) {
+    $kst = new DateTimeZone('Asia/Seoul');
+    $at  = (new DateTime($stock['created_at'], new DateTimeZone('UTC')))->setTimezone($kst);
+    $asof = ($at->format('Y-m-d') === (new DateTime('now', $kst))->format('Y-m-d') ? '오늘 ' . $at->format('H:i') : $at->format('n월 j일 H:i')) . ' 기준';
+}
+
 // 로고 색 (종목코드 해시 → 파스텔). 실제 이미지 있으면 이미지로 대체.
 $hue = crc32($stockCode) % 360;
 $hasLogo = is_file(__DIR__ . '/assets/logos/' . $stockCode . '.png');   // 없는 그림은 요청하지 않는다
@@ -84,6 +94,9 @@ include 'includes/header.php';
                 <span class="lbl">어제보다</span>
                 <span id="sd-change" class="<?= $dirCls ?>"><?= $price ? ($chg > 0 ? '+' : '') . number_format($chg) . '원 (' . ($rate > 0 ? '+' : '') . number_format($rate, 2) . '%)' : '—' ?></span>
             </div>
+            <?php if ($asof !== ''): ?>
+                <div class="sd-live sd-asof" id="sd-asof"><i></i><span><?= $asof ?></span></div>
+            <?php endif; ?>
         </div>
         <button type="button" id="sd-star" class="sd-star<?= $isFav ? ' on' : '' ?>"
                 aria-pressed="<?= $isFav ? 'true' : 'false' ?>" title="<?= $isFav ? '관심종목에서 빼기' : '관심종목에 추가' ?>">
@@ -956,6 +969,8 @@ include 'includes/header.php';
             }
             // type === 'price' → 현재가·누적거래량
             setPrice(d.price, { flash: true });
+            const asof = $('sd-asof');   // 'O월 O일 기준' → '실시간' (빨간 점이 깜빡임)
+            if (asof && !asof.classList.contains('on')) { asof.classList.add('on'); asof.querySelector('span').textContent = '실시간'; }
             if (quote && d.volume) { quote.volume = d.volume; renderStats(); }
         };
         ws.onerror = () => { /* onclose 에서 재연결 처리 */ };

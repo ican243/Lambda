@@ -149,9 +149,13 @@ include 'includes/header.php';
         $('hm-status').querySelector('span').textContent = txt;
 
         // 'HH:MM 기준'은 시세가 오늘 것일 때만 보여준다 (오래된 시세에 지금 시각을 붙이면 거짓말이 되므로)
-        const latest = stocks.map(s => s.updated_at || '').sort().pop();
-        const fresh = latest && latest.slice(0, 10) >= t.toISOString().slice(0, 10);
-        $('hm-time').textContent = fresh ? `${String(t.getUTCHours()).padStart(2, '0')}:${String(t.getUTCMinutes()).padStart(2, '0')} 기준` : '';
+        // updated_at 은 DB 시계(UTC) → +9시간 해서 한국 시간으로 비교·표시 (kstNow 와 같은 방식: getUTC* 로 읽음)
+        const latestUtc = stocks.map(s => s.updated_at || '').sort().pop();
+        const latest = latestUtc ? new Date(Date.parse(latestUtc.replace(' ', 'T') + 'Z') + 9 * 3600e3) : null;
+        const fresh = latest && latest.toISOString().slice(0, 10) >= t.toISOString().slice(0, 10);
+        const hm = d => `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+        // 오늘 시세가 아니면 마지막으로 받은 날짜·시각을 보여 준다 (예: '9월 17일 19:14 기준') → 멈춘 시세를 실시간으로 오해하지 않게
+        $('hm-time').textContent = fresh ? `${hm(t)} 기준` : latest ? `${latest.getUTCMonth() + 1}월 ${latest.getUTCDate()}일 ${hm(latest)} 기준` : '';
     }
 
     // ================= 지수 카드 (작은 선 차트 포함) =================
