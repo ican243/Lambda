@@ -13,6 +13,8 @@ const KIS_DOWN_SEC  = 60;
 
 function kisRecentlyDown()
 {
+    // PHP는 파일 시각을 한 번 읽으면 기억해 둔다 → 오래 도는 cron(종목 100개)에서도 방금 남긴 기록이 보이게 매번 새로 읽기
+    clearstatcache(true, KIS_DOWN_FILE);
     $t = @filemtime(KIS_DOWN_FILE);
     return $t && $t > time() - KIS_DOWN_SEC;
 }
